@@ -283,7 +283,7 @@
   <div class="field"><label>方向</label><div class="seg" id="pf_dir"><button type="button" data-dir="long">做多</button><button type="button" data-dir="short">做空</button></div></div>
   <div class="field"><label>合約類型</label><div class="seg" id="pf_type"><button type="button" data-spl="2000">一般（2000 股/口）</button><button type="button" data-spl="100">小型（100 股/口）</button></div></div>
   <div class="field two"><div><label>進場價位</label><input id="pf_price" class="num" inputmode="decimal" placeholder="1085"></div><div><label>口數</label><input id="pf_lots" class="num" inputmode="numeric" placeholder="1"></div></div>
-  <div class="field"><label>使用保證金</label><input id="pf_margin" class="num" inputmode="numeric" placeholder="55000"></div>
+  <div class="field"><label>每口保證金（總保證金 ＝ 每口 × 口數）</label><input id="pf_margin" class="num" inputmode="numeric" placeholder="18000"></div>
   <div class="field"><label>進場理由（會顯示在口數旁）</label><textarea id="pf_note" placeholder="分兩批進 / 突破前高"></textarea></div>
   <div class="calc-preview" id="pf_merge" style="display:none"><span>已有同方向持倉</span><b id="pf_mergeTxt">—</b></div>
   <div class="modal-actions"><button class="btn ghost" data-close>取消</button><button class="btn primary" id="pf_save">儲存</button></div>
@@ -304,7 +304,7 @@
   <h3>編輯持倉</h3><p class="hint">可分別修正原始單與加碼單的價格、口數（打錯時用）。</p>
   <div class="field"><label>標的名稱</label><input id="ef_sym"></div>
   <div class="field"><label>合約類型</label><div class="seg" id="ef_type"><button type="button" data-spl="2000">一般（2000）</button><button type="button" data-spl="100">小型（100）</button></div></div>
-  <div class="field"><label>使用保證金</label><input id="ef_margin" class="num" inputmode="numeric"></div>
+  <div class="field"><label>每口保證金</label><input id="ef_margin" class="num" inputmode="numeric"></div>
   <div class="field"><label>進場明細（價 × 口數，可分別修正或刪除）</label><div id="ef_legs"></div><button type="button" class="btn sm" id="ef_addleg" style="margin-top:8px">＋ 加一筆進場</button></div>
   <div class="calc-preview"><span>試算</span><b id="ef_calc">—</b></div>
   <div class="modal-actions"><button class="btn ghost" data-close>取消</button><button class="btn primary" id="ef_save">儲存</button></div>
@@ -402,10 +402,10 @@ function demoState(){
   const rec=(sym,dir,spl,entry,exit,lots,margin,exitAgo,entryAgo,ni,no)=>{const ex=new Date(now-exitAgo*D),en=new Date(now-entryAgo*D);const d=dir==="long"?(exit-entry):(entry-exit);const pnl=d*spl*lots;return {id:id(),sym,dir,spl,entry,exit,lots,margin,pnl,ret:margin?pnl/margin:0,ts:now-exitAgo*D,entryTime:lbl(en),time:lbl(ex),noteIn:ni,noteOut:no};};
   return {
     positions:[
-      {id:id(),sym:"聯電期",dir:"long",spl:2000,margin:42800,legs:[{price:52.5,lots:2,t:"9/09",note:"分兩批進"},{price:53.4,lots:1,t:"9/11 10:22",note:"回測不破再進"}],exits:[]},
-      {id:id(),sym:"台積電小型期",dir:"long",spl:100,margin:14700,legs:[{price:1085,lots:1,t:"9/12",note:"小型試單"}],exits:[]},
-      {id:id(),sym:"友達期",dir:"short",spl:2000,margin:22700,legs:[{price:16.8,lots:5,t:"9/10",note:"跌破頸線放空"}],exits:[]},
-      {id:id(),sym:"華邦電期",dir:"short",spl:2000,margin:14700,legs:[{price:27.3,lots:2,t:"9/11",note:"記憶體轉弱"}],exits:[]}
+      {id:id(),sym:"聯電期",dir:"long",spl:2000,mpl:14000,legs:[{price:52.5,lots:2,t:"9/09",note:"分兩批進"},{price:53.4,lots:1,t:"9/11 10:22",note:"回測不破再進"}],exits:[]},
+      {id:id(),sym:"台積電小型期",dir:"long",spl:100,mpl:14700,legs:[{price:1085,lots:1,t:"9/12",note:"小型試單"}],exits:[]},
+      {id:id(),sym:"友達期",dir:"short",spl:2000,mpl:4500,legs:[{price:16.8,lots:5,t:"9/10",note:"跌破頸線放空"}],exits:[]},
+      {id:id(),sym:"華邦電期",dir:"short",spl:2000,mpl:7400,legs:[{price:27.3,lots:2,t:"9/11",note:"記憶體轉弱"}],exits:[]}
     ],
     watchlist:[
       {id:id(),sym:"鴻海期",bias:"long",reason:"站上月線＋外資連三買，等回測不破再進。"},
@@ -428,9 +428,13 @@ function emptyState(){return {positions:[],watchlist:[],history:[]};}
 function normalize(o){
   o=o||{};
   return {
-    positions:(o.positions||[]).map(p=>({id:p.id||id(),sym:p.sym||"",dir:p.dir==="short"?"short":"long",spl:+p.spl||2000,margin:+p.margin||0,
-      legs:(p.legs||[]).map(l=>({price:+l.price||0,lots:+l.lots||0,t:l.t||"",note:l.note||""})),
-      exits:(p.exits||[]).map(e=>({price:+e.price||0,lots:+e.lots||0,pnl:+e.pnl||0,t:e.t||"",note:e.note||""}))})),
+    positions:(o.positions||[]).map(p=>{
+      const legs=(p.legs||[]).map(l=>({price:+l.price||0,lots:+l.lots||0,t:l.t||"",note:l.note||""}));
+      const exits=(p.exits||[]).map(e=>({price:+e.price||0,lots:+e.lots||0,pnl:+e.pnl||0,t:e.t||"",note:e.note||""}));
+      const ol=legs.reduce((s,l)=>s+l.lots,0)-exits.reduce((s,e)=>s+e.lots,0);
+      const mpl=(p.mpl!=null)?+p.mpl:((+p.margin||0)/(ol>0?ol:1));
+      return {id:p.id||id(),sym:p.sym||"",dir:p.dir==="short"?"short":"long",spl:+p.spl||2000,mpl,legs,exits};
+    }),
     watchlist:(o.watchlist||[]).map(w=>({id:w.id||id(),sym:w.sym||"",bias:w.bias||"neutral",reason:w.reason||""})),
     history:(o.history||[]).map(h=>({id:h.id||id(),sym:h.sym||"",dir:h.dir==="short"?"short":"long",entry:+h.entry||0,exit:+h.exit||0,lots:+h.lots||0,margin:+h.margin||0,pnl:+h.pnl||0,ret:+h.ret||0,ts:+h.ts||0,entryTime:h.entryTime||"",time:h.time||"",noteIn:h.noteIn||"",noteOut:h.noteOut||""}))
   };
@@ -443,6 +447,7 @@ function openLots(p){return entered(p)-exited(p);}
 function avgEntry(p){const tl=entered(p);return tl?p.legs.reduce((s,l)=>s+l.price*l.lots,0)/tl:0;}
 function legNotes(p){return p.legs.map(l=>l.note).filter(Boolean).join(" / ");}
 function contractVal(p){return avgEntry(p)*(p.spl||2000)*openLots(p);}
+function marginOf(p){return (+p.mpl||0)*openLots(p);}
 function fmt(n){return Math.round(n).toLocaleString("en-US");}
 function fmtSigned(n){return (n>=0?"+":"−")+fmt(Math.abs(n));}
 function pct(n){return (n>=0?"+":"−")+Math.abs(n).toFixed(2)+"%";}
@@ -457,7 +462,7 @@ function equitySeries(){
 function computed(){
   const realized=state.history.reduce((s,h)=>s+(+h.pnl||0),0);
   const equity=START_CAP+realized;
-  const used=state.positions.reduce((s,p)=>s+(+p.margin||0),0);
+  const used=state.positions.reduce((s,p)=>s+marginOf(p),0);
   const free=equity-used, ret=(realized/START_CAP)*100;
   const availPct=equity>0?Math.max(0,Math.min(1,free/equity)):0;
   const pts=equitySeries();let peak=START_CAP,mddPct=0,mddAmt=0;
@@ -515,7 +520,7 @@ function posCard(p){
     <div class="pos-grid2">
       <div class="cell"><span class="lab">均價</span><span class="val">${r2(avgEntry(p))}</span></div>
       <div class="cell"><span class="lab">未平口數</span><span class="val">${openLots(p)} 口</span></div>
-      <div class="cell full"><span class="lab">使用保證金</span><span class="val">${fmt(+p.margin||0)}</span></div>
+      <div class="cell full"><span class="lab">使用保證金（每口 ${fmt(+p.mpl||0)}）</span><span class="val">${fmt(marginOf(p))}</span></div>
     </div>
     <div class="pos-log">${log}</div>`;
   return el;
@@ -523,7 +528,7 @@ function posCard(p){
 function renderPositions(){
   const longs=state.positions.filter(p=>p.dir==="long"),shorts=state.positions.filter(p=>p.dir==="short");
   const lb=document.getElementById("longBody"),sb=document.getElementById("shortBody");lb.innerHTML="";sb.innerHTML="";
-  const mL=longs.reduce((s,p)=>s+(+p.margin||0),0),mS=shorts.reduce((s,p)=>s+(+p.margin||0),0);
+  const mL=longs.reduce((s,p)=>s+marginOf(p),0),mS=shorts.reduce((s,p)=>s+marginOf(p),0);
   const cvL=longs.reduce((s,p)=>s+contractVal(p),0),cvS=shorts.reduce((s,p)=>s+contractVal(p),0);
   document.getElementById("longSub").textContent=`${longs.length} 檔 · 契約 ${fmt(cvL)} · 保證金 ${fmt(mL)}`;
   document.getElementById("shortSub").textContent=`${shorts.length} 檔 · 契約 ${fmt(cvS)} · 保證金 ${fmt(mS)}`;
@@ -651,23 +656,23 @@ document.querySelectorAll("#pf_type button").forEach(b=>b.onclick=()=>setType(+b
 document.getElementById("pf_save").onclick=()=>{
   const sym=pf_sym.value.trim();if(!sym){alert("請輸入標的名稱");return;}
   const price=+pf_price.value||0,lots=+pf_lots.value||0,margin=+pf_margin.value||0,note=pf_note.value.trim();
-  if(!price||!lots){alert("請輸入進場價與口數");return;}if(!margin){alert("請填使用保證金");return;}
+  if(!price||!lots){alert("請輸入進場價與口數");return;}if(!margin){alert("請填每口保證金");return;}
   const m=findMatch(sym,curDir,curSpl);
-  if(m){m.legs.push({price,lots,t:stamp().md+" "+stamp().hm,note});m.margin=(+m.margin||0)+margin;toast(`已整合到「${sym}」，均價 ${r2(avgEntry(m))}`);}
-  else{state.positions.push({id:id(),sym,dir:curDir,spl:curSpl,margin,legs:[{price,lots,t:stamp().md,note}],exits:[]});}
+  if(m){m.legs.push({price,lots,t:stamp().md+" "+stamp().hm,note});if(margin)m.mpl=margin;toast(`已整合到「${sym}」，均價 ${r2(avgEntry(m))}`);}
+  else{state.positions.push({id:id(),sym,dir:curDir,spl:curSpl,mpl:margin,legs:[{price,lots,t:stamp().md,note}],exits:[]});}
   hide("posOverlay");persist();
 };
 
 /* ---------- 出場 ---------- */
 let closeId=null;
 function openClose(pid){closeId=pid;const p=state.positions.find(x=>x.id===pid);document.getElementById("cf_desc").textContent=`${p.sym}（${p.dir==="long"?"多":"空"} 均價 ${r2(avgEntry(p))}，未平 ${openLots(p)} 口）`;cf_price.value=r2(avgEntry(p));cf_lots.value=openLots(p);cf_note.value="";calcClose();show("closeOverlay");}
-function calcClose(){const p=state.positions.find(x=>x.id===closeId);if(!p)return;const exit=+cf_price.value||0,ob=openLots(p),lots=Math.min(+cf_lots.value||0,ob);const d=p.dir==="long"?(exit-avgEntry(p)):(avgEntry(p)-exit);const pnl=d*(p.spl||2000)*lots;const rel=ob?(+p.margin||0)*(lots/ob):0;cf_pnl.textContent=fmtSigned(pnl);cf_pnl.className=pnl>=0?"up":"down";cf_left.textContent=(ob-lots)+" 口 / "+fmt(rel);}
+function calcClose(){const p=state.positions.find(x=>x.id===closeId);if(!p)return;const exit=+cf_price.value||0,ob=openLots(p),lots=Math.min(+cf_lots.value||0,ob);const d=p.dir==="long"?(exit-avgEntry(p)):(avgEntry(p)-exit);const pnl=d*(p.spl||2000)*lots;const rel=(+p.mpl||0)*lots;cf_pnl.textContent=fmtSigned(pnl);cf_pnl.className=pnl>=0?"up":"down";cf_left.textContent=(ob-lots)+" 口 / "+fmt(rel);}
 cf_price.addEventListener("input",calcClose);cf_lots.addEventListener("input",calcClose);
-document.getElementById("cf_save").onclick=()=>{const p=state.positions.find(x=>x.id===closeId);if(!p)return;const exit=+cf_price.value||0,ob=openLots(p),lots=Math.min(+cf_lots.value||0,ob);if(!exit||!lots){alert("請輸入出場價與口數");return;}const avg=avgEntry(p),d=p.dir==="long"?(exit-avg):(avg-exit),pnl=d*(p.spl||2000)*lots;const rel=ob?(+p.margin||0)*(lots/ob):0;const entT=(p.legs[0]&&p.legs[0].t)||"",note=cf_note.value.trim();p.exits.push({price:exit,lots,pnl,t:stamp().md+" "+stamp().hm,note});state.history.push({id:id(),sym:p.sym,dir:p.dir,entry:r2(avg),exit,lots,margin:rel,pnl,ret:rel?pnl/rel:0,ts:Date.now(),entryTime:entT,time:stamp().md+" "+stamp().hm,noteIn:legNotes(p),noteOut:note});p.margin=Math.max(0,(+p.margin||0)-rel);if(openLots(p)<=0)state.positions=state.positions.filter(x=>x.id!==closeId);hide("closeOverlay");persist();};
+document.getElementById("cf_save").onclick=()=>{const p=state.positions.find(x=>x.id===closeId);if(!p)return;const exit=+cf_price.value||0,ob=openLots(p),lots=Math.min(+cf_lots.value||0,ob);if(!exit||!lots){alert("請輸入出場價與口數");return;}const avg=avgEntry(p),d=p.dir==="long"?(exit-avg):(avg-exit),pnl=d*(p.spl||2000)*lots;const rel=(+p.mpl||0)*lots;const entT=(p.legs[0]&&p.legs[0].t)||"",note=cf_note.value.trim();p.exits.push({price:exit,lots,pnl,t:stamp().md+" "+stamp().hm,note});state.history.push({id:id(),sym:p.sym,dir:p.dir,entry:r2(avg),exit,lots,margin:rel,pnl,ret:rel?pnl/rel:0,ts:Date.now(),entryTime:entT,time:stamp().md+" "+stamp().hm,noteIn:legNotes(p),noteOut:note});if(openLots(p)<=0)state.positions=state.positions.filter(x=>x.id!==closeId);hide("closeOverlay");persist();};
 
 /* ---------- 編輯 ---------- */
 let editId=null,editSpl=2000,editLegs=[];
-function openEdit(pid){editId=pid;const p=state.positions.find(x=>x.id===pid);ef_sym.value=p.sym;ef_margin.value=+p.margin||0;setEditType(p.spl||2000);editLegs=p.legs.map(l=>({price:l.price,lots:l.lots,t:l.t||"",note:l.note||""}));renderEditLegs();show("editOverlay");}
+function openEdit(pid){editId=pid;const p=state.positions.find(x=>x.id===pid);ef_sym.value=p.sym;ef_margin.value=+p.mpl||0;setEditType(p.spl||2000);editLegs=p.legs.map(l=>({price:l.price,lots:l.lots,t:l.t||"",note:l.note||""}));renderEditLegs();show("editOverlay");}
 function setEditType(spl){editSpl=spl;document.querySelectorAll("#ef_type button").forEach(b=>b.className=(+b.dataset.spl===spl)?(spl===100?"on-mini":"on-normal"):"");}
 document.querySelectorAll("#ef_type button").forEach(b=>b.onclick=()=>setEditType(+b.dataset.spl));
 function renderEditLegs(){
@@ -677,15 +682,16 @@ function renderEditLegs(){
   box.querySelectorAll("[data-legdel]").forEach(b=>b.onclick=()=>{editLegs.splice(+b.dataset.legdel,1);renderEditLegs();});
   calcEdit();
 }
-function calcEdit(){const tl=editLegs.reduce((s,l)=>s+(+l.lots||0),0),sum=editLegs.reduce((s,l)=>s+(+l.price||0)*(+l.lots||0),0),avg=tl?sum/tl:0;const p=state.positions.find(x=>x.id===editId);const exd=p?exited(p):0;document.getElementById("ef_calc").textContent=`均價 ${r2(avg)} · 未平 ${tl-exd} 口`;}
+function calcEdit(){const tl=editLegs.reduce((s,l)=>s+(+l.lots||0),0),sum=editLegs.reduce((s,l)=>s+(+l.price||0)*(+l.lots||0),0),avg=tl?sum/tl:0;const p=state.positions.find(x=>x.id===editId);const exd=p?exited(p):0;const ol=tl-exd;const tot=(+document.getElementById("ef_margin").value||0)*ol;document.getElementById("ef_calc").textContent=`均價 ${r2(avg)} · 未平 ${ol} 口 · 保證金 ${fmt(tot)}`;}
 document.getElementById("ef_addleg").onclick=()=>{editLegs.push({price:"",lots:"",t:stamp().md,note:""});renderEditLegs();};
+document.getElementById("ef_margin").addEventListener("input",calcEdit);
 document.getElementById("ef_save").onclick=()=>{
   const p=state.positions.find(x=>x.id===editId);if(!p)return;
   const legs=editLegs.map(l=>({price:+l.price||0,lots:+l.lots||0,t:l.t||stamp().md,note:l.note||""})).filter(l=>l.price>0&&l.lots>0);
   if(!legs.length){alert("至少要有一筆有效的進場（價與口數）");return;}
   const tl=legs.reduce((s,l)=>s+l.lots,0),exd=exited(p);
   if(tl<exd){alert("進場總口數不能小於已出場的 "+exd+" 口");return;}
-  p.sym=ef_sym.value.trim()||p.sym;p.spl=editSpl;p.margin=+ef_margin.value||0;p.legs=legs;
+  p.sym=ef_sym.value.trim()||p.sym;p.spl=editSpl;p.mpl=+ef_margin.value||0;p.legs=legs;
   hide("editOverlay");persist();
 };
 
@@ -741,6 +747,14 @@ let rt;window.addEventListener("resize",()=>{clearTimeout(rt);rt=setTimeout(draw
 (async function init(){
   state=await Store.load();
   if(!state)state=demoState();
+  // 舊資料（整筆保證金）自動轉成每口保證金
+  (state.positions||[]).forEach(p=>{
+    if(p.mpl==null){
+      const ol=(p.legs||[]).reduce((s,l)=>s+(+l.lots||0),0)-(p.exits||[]).reduce((s,e)=>s+(+e.lots||0),0);
+      p.mpl=(+p.margin||0)/(ol>0?ol:1);
+    }
+    delete p.margin;
+  });
   await Store.save(state);renderAll();
 })();
 </script>
