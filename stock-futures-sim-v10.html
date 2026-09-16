@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>股期模擬操盤台</title>
+<style>
+  :root{
+    --bg:#0F1419; --panel:#161B22; --panel-2:#1B2029;
+    --line:#232B36; --line-soft:#1E2530;
+    --ink:#E9EDF2; --ink-dim:#9AA4B2; --ink-faint:#5C6672;
+    --up:#F5455C; --up-soft:rgba(245,69,92,.14);
+    --down:#25C088; --down-soft:rgba(37,192,136,.14);
+    --gold:#E8B44A; --blue:#5B9DFF; --violet:#A78BFA; --focus:#5B9DFF;
+    --mono:"Roboto Mono","SFMono-Regular",ui-monospace,Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif;
+  }
+  *{box-sizing:border-box} html,body{margin:0;padding:0}
+  body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased;padding-bottom:60px}
+  .num{font-family:var(--mono);font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+  .up{color:var(--up)} .down{color:var(--down)}
+  button{font-family:inherit;cursor:pointer}
+  :focus-visible{outline:2px solid var(--focus);outline-offset:2px;border-radius:4px}
+
+  header{display:flex;align-items:center;gap:16px;padding:14px 22px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,#141922,#11151c);position:sticky;top:0;z-index:20}
+  .brand{display:flex;flex-direction:column;line-height:1.2}
+  .brand b{font-size:15px;font-weight:650;letter-spacing:.02em} .brand span{font-size:11px;color:var(--ink-faint)}
+  .header-cap{margin-left:6px;padding:5px 12px;border:1px solid var(--line);border-radius:8px;background:var(--panel);display:flex;flex-direction:column;line-height:1.25}
+  .header-cap small{font-size:10px;color:var(--ink-faint)} .header-cap b{font-size:13px}
+  .header-spacer{flex:1}
+  .btn{border:1px solid var(--line);background:var(--panel-2);color:var(--ink);padding:8px 14px;border-radius:8px;font-size:13px;font-weight:550;transition:background .15s,border-color .15s}
+  .btn:hover{background:#232B36;border-color:#2E3846}
+  .btn.primary{background:var(--gold);border-color:var(--gold);color:#1A1400;font-weight:650} .btn.primary:hover{background:#f0c25f}
+  .btn.ghost{background:transparent} .btn.sm{padding:5px 10px;font-size:12px;border-radius:7px}
+
+  .tabs{display:flex;gap:4px;padding:0 22px;border-bottom:1px solid var(--line);background:#11151c;position:sticky;top:57px;z-index:19}
+  .tab{padding:12px 18px;font-size:14px;font-weight:600;color:var(--ink-dim);background:transparent;border:none;border-bottom:2px solid transparent;margin-bottom:-1px}
+  .tab.on{color:var(--ink);border-bottom-color:var(--gold)} .tab:hover{color:var(--ink)}
+
+  .wrap{max-width:1240px;margin:0 auto;padding:20px 22px}
+  .page{display:none} .page.on{display:block}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px}
+  .hero-grid{display:grid;grid-template-columns:1fr 310px;gap:16px}
+
+  .equity-top{display:flex;flex-direction:column;align-items:flex-start;padding:18px 22px 8px}
+  .equity-label{font-size:11px;color:var(--ink-faint);margin-bottom:6px}
+  .equity-value{font-family:var(--mono);font-size:38px;font-weight:600;line-height:1;letter-spacing:-.02em}
+  .equity-value .cur{font-size:17px;color:var(--ink-dim);margin-right:6px;font-weight:500}
+  .chart-cap{display:flex;gap:16px;padding:2px 22px 0;font-size:11px;color:var(--ink-faint)}
+  .chart-cap span{display:flex;align-items:center;gap:6px}
+  .chart-cap .sw{width:12px;height:3px;border-radius:2px} .chart-cap .sq{width:9px;height:9px;border-radius:2px}
+  .chart-holder{position:relative;padding:2px 10px 12px}
+  #equityChart{width:100%;height:300px;display:block}
+  .chart-tip{position:absolute;pointer-events:none;background:#0c1017;border:1px solid var(--line);border-radius:8px;padding:7px 10px;font-size:12px;opacity:0;transition:opacity .1s;z-index:5;white-space:nowrap;transform:translate(-50%,-115%)}
+  .chart-tip .d{color:var(--ink-faint);font-size:11px;margin-bottom:2px} .chart-tip .v{font-family:var(--mono);font-weight:600;font-size:13px}
+
+  .rail{display:flex;flex-direction:column;gap:10px}
+  .stat{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:13px 15px;display:flex;flex-direction:column;gap:3px}
+  .stat .k{font-size:11px;color:var(--ink-faint);display:flex;align-items:center;gap:6px}
+  .stat .v{font-family:var(--mono);font-size:22px;font-weight:650;letter-spacing:-.01em}
+  .stat .amt{font-family:var(--mono);font-size:16px;font-weight:650;margin-top:1px}
+  .dot{width:7px;height:7px;border-radius:50%}
+  .ring-row{display:flex;align-items:center;gap:16px;margin-top:6px}
+  .ring{flex:none} .ring-track{fill:none;stroke:var(--line);stroke-width:9}
+  .ring-arc{fill:none;stroke:var(--gold);stroke-width:9;stroke-linecap:round;transition:stroke-dashoffset .4s}
+  .ring-pct{font-family:var(--mono);font-size:20px;font-weight:700;fill:var(--ink)}
+  .ring-side{display:flex;flex-direction:column;gap:9px}
+  .ring-side .lab{font-size:11px;color:var(--ink-faint);display:block}
+  .ring-side b{font-family:var(--mono);font-size:16px;font-weight:650}
+
+  .section-head{display:flex;align-items:center;gap:10px;margin:26px 2px 12px}
+  .section-head h2{font-size:15px;font-weight:600;margin:0} .section-head .count{font-size:12px;color:var(--ink-faint);font-family:var(--mono)} .section-head .grow{flex:1}
+
+  .mini-tag{font-size:10px;font-weight:700;padding:2px 7px;border-radius:5px;background:var(--violet);color:#1a1030;letter-spacing:.03em}
+
+  .book{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  .col-head{display:flex;align-items:center;gap:9px;padding:10px 14px;border-radius:10px 10px 0 0;border:1px solid var(--line);border-bottom:none}
+  .col.long .col-head{background:linear-gradient(180deg,rgba(245,69,92,.10),transparent)}
+  .col.short .col-head{background:linear-gradient(180deg,rgba(37,192,136,.10),transparent)}
+  .col-head .tag{font-weight:700;font-size:14px}
+  .col.long .tag{color:var(--up)} .col.short .tag{color:var(--down)}
+  .col-head .sub{font-size:12px;color:var(--ink-faint);font-family:var(--mono)} .col-head .grow{flex:1}
+  .col-body{border:1px solid var(--line);border-radius:0 0 10px 10px;padding:12px;display:flex;flex-direction:column;gap:10px;min-height:120px}
+
+  .pos-card{background:var(--panel-2);border:1px solid var(--line);border-radius:11px;padding:14px 15px}
+  .pos-head{display:flex;align-items:center;gap:9px;margin-bottom:13px;flex-wrap:wrap}
+  .pos-sym{font-weight:700;font-size:16px}
+  .pos-actions{margin-left:auto;display:flex;gap:5px}
+  .icon-btn{border:1px solid var(--line);background:transparent;color:var(--ink-dim);width:28px;height:28px;border-radius:7px;font-size:12px;display:grid;place-items:center}
+  .icon-btn:hover{background:#232B36;color:var(--ink)}
+  .pos-grid2{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line);border:1px solid var(--line);border-radius:9px;overflow:hidden}
+  .pos-grid2 .cell{background:var(--panel-2);padding:10px 13px;display:flex;flex-direction:column;gap:4px}
+  .pos-grid2 .cell.full{grid-column:span 2}
+  .pos-grid2 .lab{font-size:12px;color:#AEB8C6;font-weight:650;letter-spacing:.04em}
+  .pos-grid2 .val{font-family:var(--mono);font-size:17px;font-weight:700}
+  .pos-log{margin-top:11px;padding-top:10px;border-top:1px dashed var(--line-soft);display:flex;flex-direction:column;gap:5px}
+  .pos-log .row{font-size:11px;font-family:var(--mono);color:var(--ink-dim);display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+  .pos-log .row .nt{flex:1 1 60px;color:var(--ink-dim);font-family:var(--sans)}
+  .pos-log .row .t{color:var(--ink-faint)}
+  .pos-log .row .lbl{padding:1px 6px;border-radius:4px;font-size:10px;font-weight:650;flex:none}
+  .pos-log .row .lbl.in{background:rgba(232,180,74,.14);color:var(--gold)}
+  .pos-log .row .lbl.out{background:var(--down-soft);color:var(--down)}
+  .empty-col{color:var(--ink-faint);font-size:12px;text-align:center;padding:10px}
+
+  .htable{width:100%;border-collapse:collapse}
+  .htable th{text-align:left;font-size:11px;color:var(--ink-faint);font-weight:500;padding:0 12px 10px;border-bottom:1px solid var(--line)}
+  .htable td{padding:12px;border-bottom:1px solid var(--line-soft);font-size:13px;vertical-align:middle}
+  .htable tr:last-child td{border-bottom:none} .htable .num{font-family:var(--mono)}
+  .dir-badge{font-size:11px;font-weight:650;padding:3px 8px;border-radius:6px}
+  .dir-badge.long{background:var(--up-soft);color:var(--up)} .dir-badge.short{background:var(--down-soft);color:var(--down)}
+  .times{font-size:12px;font-family:var(--mono);color:var(--ink-dim);line-height:1.5} .times b{color:var(--ink-faint);font-weight:650;margin-right:4px;font-size:10px}
+  .rsn{font-size:12px;color:var(--ink-dim);line-height:1.5;max-width:320px} .rsn b{color:var(--ink-faint);font-weight:650;margin-right:4px;font-size:11px}
+  .empty{color:var(--ink-faint);font-size:13px;padding:30px;text-align:center}
+  .hist-summary{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
+  .filter-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 2px 14px}
+  .filter-bar .fl{font-size:12px;color:var(--ink-faint)}
+  .chip{border:1px solid var(--line);background:var(--panel-2);color:var(--ink-dim);padding:5px 12px;border-radius:8px;font-size:12px;font-weight:600}
+  .chip:hover{border-color:#2E3846;color:var(--ink)}
+  .chip.on{border-color:var(--gold);color:var(--gold);background:rgba(232,180,74,.12)}
+  .dinp{background:var(--bg);border:1px solid var(--line);color:var(--ink);padding:5px 9px;border-radius:8px;font-family:var(--mono);font-size:12px;color-scheme:dark}
+
+  .overlay{position:fixed;inset:0;background:rgba(6,9,13,.66);backdrop-filter:blur(3px);display:none;align-items:center;justify-content:center;z-index:50;padding:20px}
+  .overlay.on{display:flex}
+  .modal{background:var(--panel);border:1px solid var(--line);border-radius:14px;width:100%;max-width:440px;padding:22px 24px;max-height:90vh;overflow:auto}
+  .modal h3{margin:0 0 4px;font-size:16px} .modal p.hint{margin:0 0 16px;font-size:12px;color:var(--ink-faint)}
+  .field{margin-bottom:13px} .field.two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .field label{display:block;font-size:12px;color:var(--ink-dim);margin-bottom:5px}
+  .field input,.field textarea,.field select{width:100%;background:var(--bg);border:1px solid var(--line);color:var(--ink);padding:9px 11px;border-radius:8px;font-family:inherit;font-size:13px}
+  .field input[type=date]{color-scheme:dark;font-family:var(--mono)}
+  .field input.num{font-family:var(--mono)} .field textarea{resize:vertical;min-height:54px}
+  .seg{display:flex;gap:8px}
+  .seg button{flex:1;border:1px solid var(--line);background:var(--bg);color:var(--ink-dim);padding:9px;border-radius:8px;font-size:13px;font-weight:600}
+  .seg button.on-long{background:var(--up-soft);border-color:var(--up);color:var(--up)}
+  .seg button.on-short{background:var(--down-soft);border-color:var(--down);color:var(--down)}
+  .seg button.on-normal{background:rgba(232,180,74,.14);border-color:var(--gold);color:var(--gold)}
+  .seg button.on-mini{background:rgba(167,139,250,.16);border-color:var(--violet);color:#c9b6ff}
+  .seg button.on-neutral{background:#242b35;border-color:#3a4452;color:var(--ink)}
+  .calc-preview{background:var(--bg);border:1px solid var(--line-soft);border-radius:9px;padding:11px 13px;margin-bottom:6px;font-size:12px;color:var(--ink-dim);display:flex;justify-content:space-between}
+  .calc-preview b{font-family:var(--mono);color:var(--ink);font-size:14px}
+  .modal-actions{display:flex;gap:10px;margin-top:20px} .modal-actions .btn{flex:1;justify-content:center;text-align:center}
+  .sub-hint{font-size:11px;color:var(--ink-faint);line-height:1.6;margin:2px 0 0}
+  .divider{border-top:1px solid var(--line-soft);margin:16px 0}
+
+  .toast-wrap{position:fixed;left:50%;bottom:28px;transform:translateX(-50%);z-index:80;display:flex;flex-direction:column;gap:8px;align-items:center}
+  .toast{background:#0c1017;border:1px solid var(--line);color:var(--ink);padding:10px 16px;border-radius:10px;font-size:13px;box-shadow:0 6px 24px rgba(0,0,0,.4)}
+
+  @media(max-width:860px){
+    .hero-grid{grid-template-columns:1fr}
+    .rail{flex-direction:row;flex-wrap:wrap} .rail .stat{flex:1;min-width:150px}
+    .book{grid-template-columns:1fr}
+    .hist-summary{grid-template-columns:1fr 1fr}
+    .equity-value{font-size:30px} header{flex-wrap:wrap}
+  }
+  @media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand"><b>股期模擬操盤台</b><span>Stock Futures Paper Trading</span></div>
+  <div class="header-cap"><small>起始資金</small><b class="num">NT$ 1,000,000</b></div>
+  <div class="header-spacer"></div>
+  <button class="btn ghost sm" id="syncBtn">⇅ 資料同步</button>
+  <button class="btn ghost sm" id="loadDemo">載入範例</button>
+  <button class="btn ghost sm" id="clearAll">清空</button>
+</header>
+
+<div class="tabs">
+  <button class="tab on" data-tab="deck">操盤台</button>
+  <button class="tab" data-tab="history">歷史買賣紀錄</button>
+</div>
+
+<div class="wrap">
+
+  <!-- ============ 操盤台 ============ -->
+  <div class="page on" id="page-deck">
+    <div class="hero-grid">
+      <div class="card">
+        <div class="equity-top">
+          <div class="equity-label">目前權益（起始 ＋ 已實現損益）</div>
+          <div class="equity-value" id="equityVal"><span class="cur">NT$</span>—</div>
+        </div>
+        <div class="chart-cap">
+          <span><span class="sw" style="background:var(--gold)"></span>權益曲線</span>
+          <span><span class="sq" style="background:var(--blue)"></span>平倉成交值</span>
+        </div>
+        <div class="chart-holder"><canvas id="equityChart"></canvas><div class="chart-tip" id="chartTip"></div></div>
+      </div>
+      <div class="rail">
+        <div class="stat"><div class="k">總報酬率</div><div class="v" id="statReturn">—</div><div class="amt" id="statPnl">—</div></div>
+        <div class="stat"><div class="k"><span class="dot" style="background:var(--down)"></span>最大回撤 MDD</div><div class="v down" id="statMdd">—</div><div class="amt down" id="statMddAmt">—</div></div>
+        <div class="stat">
+          <div class="k">剩餘資金</div>
+          <div class="ring-row">
+            <svg class="ring" viewBox="0 0 100 100" width="92" height="92">
+              <circle class="ring-track" cx="50" cy="50" r="42"/>
+              <circle class="ring-arc" id="ringArc" cx="50" cy="50" r="42" transform="rotate(-90 50 50)"/>
+              <text class="ring-pct" id="ringPct" x="50" y="50" text-anchor="middle" dominant-baseline="central">—</text>
+            </svg>
+            <div class="ring-side">
+              <div><span class="lab">剩餘資金</span><b class="num" id="ringFree">—</b></div>
+              <div><span class="lab">已用保證金</span><b class="num" id="ringUsed">—</b></div>
+              <div><span class="lab">已實現損益</span><b class="num" id="ringReal">—</b></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-head"><h2>目前持倉</h2><span class="count" id="posSlot"></span></div>
+    <div class="book">
+      <div class="col long">
+        <div class="col-head"><span class="tag">多單</span><span class="sub" id="longSub"></span><div class="grow"></div><button class="btn sm" data-add-dir="long">＋ 新增多單</button></div>
+        <div class="col-body" id="longBody"></div>
+      </div>
+      <div class="col short">
+        <div class="col-head"><span class="tag">空單</span><span class="sub" id="shortSub"></span><div class="grow"></div><button class="btn sm" data-add-dir="short">＋ 新增空單</button></div>
+        <div class="col-body" id="shortBody"></div>
+      </div>
+    </div>
+
+    <div class="section-head"><h2>觀察清單</h2><span class="count" id="watchCountLabel"></span><div class="grow"></div><button class="btn sm" id="addWatchBtn">＋ 新增觀察</button></div>
+    <div class="card">
+      <table class="htable">
+        <thead><tr><th style="width:170px">標的</th><th style="width:80px">傾向</th><th>觀察原因</th><th style="width:66px"></th></tr></thead>
+        <tbody id="watchBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ============ 歷史買賣紀錄 ============ -->
+  <div class="page" id="page-history">
+    <div class="hist-summary">
+      <div class="stat"><div class="k">交易筆數<span id="hScope" style="color:var(--ink-faint);font-weight:400"></span></div><div class="v" id="hCount">—</div></div>
+      <div class="stat"><div class="k">勝率</div><div class="v" id="hWin">—</div></div>
+      <div class="stat"><div class="k">已實現損益</div><div class="v" id="hReal">—</div></div>
+      <div class="stat"><div class="k">平均報酬率</div><div class="v" id="hAvg">—</div></div>
+    </div>
+    <div class="filter-bar">
+      <span class="fl">時間段</span>
+      <button class="chip on" data-preset="all">全部</button>
+      <button class="chip" data-preset="7">近 7 日</button>
+      <button class="chip" data-preset="30">近 30 日</button>
+      <button class="chip" data-preset="90">近 90 日</button>
+      <span class="fl" style="margin-left:6px">自訂</span>
+      <input type="date" id="fFrom" class="dinp"><span class="fl">～</span><input type="date" id="fTo" class="dinp">
+    </div>
+    <div class="section-head" style="margin-top:0"><h2>成交紀錄</h2><div class="grow"></div><button class="btn sm" id="addHistBtn">＋ 手動新增紀錄</button></div>
+    <div class="card" style="overflow-x:auto">
+      <table class="htable">
+        <thead><tr>
+          <th style="width:150px">標的</th><th style="width:60px">方向</th><th style="width:96px">時間</th>
+          <th style="width:78px">進場價</th><th style="width:78px">出場價</th>
+          <th style="width:46px">口數</th><th style="width:100px">損益</th>
+          <th style="width:68px">報酬率</th><th>備註</th><th style="width:40px"></th>
+        </tr></thead>
+        <tbody id="histBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<!-- ===== 新增持倉 Modal ===== -->
+<div class="overlay" id="posOverlay"><div class="modal">
+  <h3 id="posModalTitle">新增持倉</h3>
+  <p class="hint">下同名同方向的單會自動整合、重算均價。損益＝(出場−進場) × 每口股數 × 口數，平倉才結算。</p>
+  <div class="field"><label>標的名稱</label><input id="pf_sym" placeholder="台積電期"></div>
+  <div class="field"><label>方向</label><div class="seg" id="pf_dir"><button type="button" data-dir="long">做多</button><button type="button" data-dir="short">做空</button></div></div>
+  <div class="field"><label>合約類型</label><div class="seg" id="pf_type"><button type="button" data-spl="2000">一般（2000 股/口）</button><button type="button" data-spl="100">小型（100 股/口）</button></div></div>
+  <div class="field two"><div><label>進場價位</label><input id="pf_price" class="num" inputmode="decimal" placeholder="1085"></div><div><label>口數</label><input id="pf_lots" class="num" inputmode="numeric" placeholder="1"></div></div>
+  <div class="field"><label>使用保證金</label><input id="pf_margin" class="num" inputmode="numeric" placeholder="55000"></div>
+  <div class="field"><label>進場理由（會顯示在口數旁）</label><textarea id="pf_note" placeholder="分兩批進 / 突破前高"></textarea></div>
+  <div class="calc-preview" id="pf_merge" style="display:none"><span>已有同方向持倉</span><b id="pf_mergeTxt">—</b></div>
+  <div class="modal-actions"><button class="btn ghost" data-close>取消</button><button class="btn primary" id="pf_save">儲存</button></div>
+</div></div>
+
+<!-- ===== 分批 / 全部出場 Modal ===== -->
+<div class="overlay" id="closeOverlay"><div class="modal">
+  <h3>分批 / 全部出場</h3><p class="hint" id="cf_desc">—</p>
+  <div class="field two"><div><label>出場價位</label><input id="cf_price" class="num" inputmode="decimal"></div><div><label>出場口數</label><input id="cf_lots" class="num" inputmode="numeric"></div></div>
+  <div class="calc-preview"><span>本次出場損益</span><b id="cf_pnl">—</b></div>
+  <div class="calc-preview"><span>出場後剩餘口數 / 釋放保證金</span><b id="cf_left">—</b></div>
+  <div class="field"><label>出場理由（會顯示在口數旁）</label><textarea id="cf_note" placeholder="到壓力先獲利了結 / 跌破停損"></textarea></div>
+  <div class="modal-actions"><button class="btn ghost" data-close>取消</button><button class="btn primary" id="cf_save">確認出場</button></div>
+</div></div>
+
+<!-- ===== 編輯持倉 Modal ===== -->
+<div class="overlay" id="editOverlay"><div class="modal">
+  <h3>編輯持倉</h3><p class="hint">改名稱、合約類型、保證金；口數與理由用出場或重新下單調整。</p>
+  <div class="field"><label>標的名稱</label><input id="ef_sym"></div>
+  <div class="field"><label>合約類型</label><div class="seg" id="ef_type"><button type="button" data-spl="2000">一般（2000）</button><button type="button" data-spl="100">小型（100）</button></div></div>
+  <div class="field"><label>使用保證金</label><input id="ef_margin" class="num" inputmode="numeric"></div>
+  <div class="modal-actions"><button class="btn ghost" data-close>取消</button><button class="btn primary" id="ef_save">儲存</button></div>
+</div></div>
+
+<!-- ===== 觀察 Modal ===== -->
+<div class="overlay" id="watchOverlay"><div class="modal">
+  <h3 id="watchModalTitle">新增觀察</h3><p class="hint">記錄觀察標的與理由。</p>
+  <div class="field"><label>標的名稱</label><input id="wf_sym" placeholder="鴻海期"></div>
+  <div class="field"><label>傾向</label><div class="seg" id="wf_bias"><button type="button" data-bias="long">偏多</button><button type="button" data-bias="neutral">中立</button><button type="button" data-bias="short">偏空</button></div></div>
+  <div class="field"><label>觀察原因</label><textarea id="wf_reason" placeholder="站上月線、外資連三買、爆量突破"></textarea></div>
+  <div class="modal-actions"><button class="btn ghost" data-close>取消</button><button class="btn primary" id="wf_save">儲存</button></div>
+</div></div>
+
+<!-- ===== 手動歷史 Modal ===== -->
+<div class="overlay" id="histOverlay"><div class="modal">
+  <h3>新增歷史紀錄</h3><p class="hint">手動補一筆已平倉成交（會計入權益與曲線）。</p>
+  <div class="field"><label>標的名稱</label><input id="hf_sym" placeholder="台積電期"></div>
+  <div class="field two"><div><label>方向</label><div class="seg" id="hf_dir"><button type="button" data-dir="long">做多</button><button type="button" data-dir="short">做空</button></div></div>
+    <div><label>合約類型</label><div class="seg" id="hf_type"><button type="button" data-spl="2000">一般</button><button type="button" data-spl="100">小型</button></div></div></div>
+  <div class="field two"><div><label>進場價</label><input id="hf_entry" class="num" inputmode="decimal" placeholder="1050"></div><div><label>出場價</label><input id="hf_exit" class="num" inputmode="decimal" placeholder="1088"></div></div>
+  <div class="field two"><div><label>口數</label><input id="hf_lots" class="num" inputmode="numeric" placeholder="1"></div><div><label>使用保證金</label><input id="hf_margin" class="num" inputmode="numeric" placeholder="55000"></div></div>
+  <div class="field two"><div><label>進場時間</label><input id="hf_entrytime" placeholder="9/10 開盤"></div><div><label>出場時間</label><input id="hf_time" placeholder="9/12 收盤"></div></div>
+  <div class="field"><label>交易日期（篩選用）</label><input type="date" id="hf_date"></div>
+  <div class="field"><label>備註（理由）</label><textarea id="hf_note" placeholder="進場與出場的理由"></textarea></div>
+  <div class="calc-preview"><span>損益 / 報酬率</span><b id="hf_pnl">—</b></div>
+  <div class="modal-actions"><button class="btn ghost" data-close>取消</button><button class="btn primary" id="hf_save">儲存</button></div>
+</div></div>
+
+<!-- ===== 資料同步 Modal ===== -->
+<div class="overlay" id="syncOverlay"><div class="modal">
+  <h3>資料備份 / 跨電腦同步</h3>
+  <p class="hint">資料平常存在這台電腦的瀏覽器裡。要換電腦用，可用檔案匯出／匯入，或連 GitHub Gist 雲端同步。</p>
+  <div class="field"><label>本機檔案備份</label>
+    <div style="display:flex;gap:10px">
+      <button class="btn" id="btnExport" style="flex:1">⬇ 匯出 JSON</button>
+      <button class="btn" id="btnImport" style="flex:1">⬆ 匯入 JSON</button>
+    </div>
+    <input type="file" id="fileImport" accept="application/json,.json" style="display:none">
+  </div>
+  <div class="divider"></div>
+  <div class="field"><label>GitHub 雲端同步（Gist）</label>
+    <p class="sub-hint">在 GitHub → Settings → Developer settings → Personal access tokens 產生一個帶 <b>gist</b> 權限的 token。Token 只存在本機、不會被匯出。</p>
+  </div>
+  <div class="field"><label>GitHub Token</label><input id="ghToken" type="password" class="num" placeholder="ghp_..."></div>
+  <div class="field"><label>Gist ID（留白按「建立新 Gist」）</label><input id="ghGist" class="num" placeholder="留白 → 建立新的"></div>
+  <div style="display:flex;gap:10px;margin-bottom:10px">
+    <button class="btn" id="btnGhCreate" style="flex:1">建立新 Gist</button>
+  </div>
+  <div style="display:flex;gap:10px">
+    <button class="btn primary" id="btnGhPush" style="flex:1">⬆ 上傳到 GitHub</button>
+    <button class="btn" id="btnGhPull" style="flex:1">⬇ 從 GitHub 下載</button>
+  </div>
+  <div id="ghStatus" style="margin-top:12px;font-size:12px;color:var(--ink-faint)"></div>
+  <div class="modal-actions"><button class="btn ghost" data-close>關閉</button></div>
+</div></div>
+
+<!-- ===== 自訂確認框 + 提示 ===== -->
+<div class="overlay" id="confirmOverlay"><div class="modal" style="max-width:360px">
+  <h3>確認</h3><p id="confirmMsg" style="color:var(--ink-dim);font-size:14px;margin:6px 0 20px">—</p>
+  <div class="modal-actions"><button class="btn ghost" id="confirmNo">取消</button><button class="btn primary" id="confirmOk">確定</button></div>
+</div></div>
+<div class="toast-wrap" id="toastWrap"></div>
+
+<script>
+"use strict";
+const KEY="stockfut_state_v10", mem={}, START_CAP=1000000;
+const GH_TOKEN_KEY="stockfut_gh_token", GH_GIST_KEY="stockfut_gh_gist", GIST_FILE="stockfut-data.json";
+const Store={
+  async load(){try{
+    if(window.storage){const r=await window.storage.get(KEY);return r?JSON.parse(r.value):null;}
+    if(window.localStorage){const s=localStorage.getItem(KEY);return s?JSON.parse(s):null;}
+    return mem[KEY]||null;
+  }catch(e){return mem[KEY]||null;}},
+  async save(o){const s=JSON.stringify(o);try{
+    if(window.storage){await window.storage.set(KEY,s);return;}
+    if(window.localStorage){localStorage.setItem(KEY,s);return;}
+  }catch(e){} mem[KEY]=o;}
+};
+function lsGet(k){try{return localStorage.getItem(k)||"";}catch(e){return "";}}
+function lsSet(k,v){try{localStorage.setItem(k,v);}catch(e){}}
+const id=()=>Math.random().toString(36).slice(2,9);
+let state=null;
+let histFilter={preset:"all",from:null,to:null};
+
+function toast(msg){const w=document.getElementById("toastWrap");const t=document.createElement("div");t.className="toast";t.textContent=msg;w.appendChild(t);setTimeout(()=>{t.style.transition="opacity .3s";t.style.opacity="0";setTimeout(()=>t.remove(),300);},2200);}
+function alert(msg){toast(msg);}
+function askConfirm(msg){return new Promise(res=>{const ov=document.getElementById("confirmOverlay");document.getElementById("confirmMsg").textContent=msg;ov.classList.add("on");const ok=document.getElementById("confirmOk"),no=document.getElementById("confirmNo");const done=v=>{ov.classList.remove("on");ok.onclick=null;no.onclick=null;res(v);};ok.onclick=()=>done(true);no.onclick=()=>done(false);});}
+function stamp(){const n=new Date();const p=x=>String(x).padStart(2,"0");return{md:(n.getMonth()+1)+"/"+n.getDate(),hm:p(n.getHours())+":"+p(n.getMinutes())};}
+function todayISO(){const n=new Date();const p=x=>String(x).padStart(2,"0");return n.getFullYear()+"-"+p(n.getMonth()+1)+"-"+p(n.getDate());}
+
+/* ---------- demo ---------- */
+function demoState(){
+  const now=Date.now(),D=86400000,lbl=d=>(d.getMonth()+1)+"/"+d.getDate();
+  const rec=(sym,dir,spl,entry,exit,lots,margin,exitAgo,entryAgo,ni,no)=>{const ex=new Date(now-exitAgo*D),en=new Date(now-entryAgo*D);const d=dir==="long"?(exit-entry):(entry-exit);const pnl=d*spl*lots;return {id:id(),sym,dir,spl,entry,exit,lots,margin,pnl,ret:margin?pnl/margin:0,ts:now-exitAgo*D,entryTime:lbl(en),time:lbl(ex),noteIn:ni,noteOut:no};};
+  return {
+    positions:[
+      {id:id(),sym:"聯電期",dir:"long",spl:2000,margin:42800,legs:[{price:52.5,lots:2,t:"9/09",note:"分兩批進"},{price:53.4,lots:1,t:"9/11 10:22",note:"回測不破再進"}],exits:[]},
+      {id:id(),sym:"台積電小型期",dir:"long",spl:100,margin:14700,legs:[{price:1085,lots:1,t:"9/12",note:"小型試單"}],exits:[]},
+      {id:id(),sym:"友達期",dir:"short",spl:2000,margin:22700,legs:[{price:16.8,lots:5,t:"9/10",note:"跌破頸線放空"}],exits:[]},
+      {id:id(),sym:"華邦電期",dir:"short",spl:2000,margin:14700,legs:[{price:27.3,lots:2,t:"9/11",note:"記憶體轉弱"}],exits:[]}
+    ],
+    watchlist:[
+      {id:id(),sym:"鴻海期",bias:"long",reason:"站上月線＋外資連三買，等回測不破再進。"},
+      {id:id(),sym:"陽明期",bias:"long",reason:"航運同步走強，觀察量能延續。"},
+      {id:id(),sym:"聯發科期",bias:"neutral",reason:"高檔震盪，方向未明。"}
+    ],
+    history:[
+      rec("台積電期","long",2000,1050,1070,1,283500,13,15,"帶量突破前高","到壓力先獲利了結"),
+      rec("欣興期","long",2000,168,159,1,45360,11,12,"想搶反彈","跌破停損砍出"),
+      rec("長榮期","long",2000,205,214,1,55350,8,10,"航運轉強","先出一趟落袋"),
+      rec("台達電期","short",2000,410,398,1,110700,6,7,"跌破頸線放空","回補獲利"),
+      rec("欣興期","long",2000,170,165,2,91800,4,5,"想凹單再進","認錯出場"),
+      rec("廣達期","long",2000,305,328,1,82350,1,3,"AI 族群強勢","波段滿足出場")
+    ]
+  };
+}
+function emptyState(){return {positions:[],watchlist:[],history:[]};}
+
+/* ---------- normalize（匯入用） ---------- */
+function normalize(o){
+  o=o||{};
+  return {
+    positions:(o.positions||[]).map(p=>({id:p.id||id(),sym:p.sym||"",dir:p.dir==="short"?"short":"long",spl:+p.spl||2000,margin:+p.margin||0,
+      legs:(p.legs||[]).map(l=>({price:+l.price||0,lots:+l.lots||0,t:l.t||"",note:l.note||""})),
+      exits:(p.exits||[]).map(e=>({price:+e.price||0,lots:+e.lots||0,pnl:+e.pnl||0,t:e.t||"",note:e.note||""}))})),
+    watchlist:(o.watchlist||[]).map(w=>({id:w.id||id(),sym:w.sym||"",bias:w.bias||"neutral",reason:w.reason||""})),
+    history:(o.history||[]).map(h=>({id:h.id||id(),sym:h.sym||"",dir:h.dir==="short"?"short":"long",entry:+h.entry||0,exit:+h.exit||0,lots:+h.lots||0,margin:+h.margin||0,pnl:+h.pnl||0,ret:+h.ret||0,ts:+h.ts||0,entryTime:h.entryTime||"",time:h.time||"",noteIn:h.noteIn||"",noteOut:h.noteOut||""}))
+  };
+}
+
+/* ---------- helpers ---------- */
+function entered(p){return p.legs.reduce((s,l)=>s+l.lots,0);}
+function exited(p){return p.exits.reduce((s,e)=>s+e.lots,0);}
+function openLots(p){return entered(p)-exited(p);}
+function avgEntry(p){const tl=entered(p);return tl?p.legs.reduce((s,l)=>s+l.price*l.lots,0)/tl:0;}
+function legNotes(p){return p.legs.map(l=>l.note).filter(Boolean).join(" / ");}
+function fmt(n){return Math.round(n).toLocaleString("en-US");}
+function fmtSigned(n){return (n>=0?"+":"−")+fmt(Math.abs(n));}
+function pct(n){return (n>=0?"+":"−")+Math.abs(n).toFixed(2)+"%";}
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
+function r2(n){return Math.round(n*100)/100;}
+
+function equitySeries(){
+  const pts=[{d:"起始",v:START_CAP,pnl:null,margin:null}];let cum=START_CAP;
+  for(const h of state.history){cum+=(+h.pnl||0);pts.push({d:h.time||"",v:cum,pnl:+h.pnl||0,margin:+h.margin||0});}
+  return pts;
+}
+function computed(){
+  const realized=state.history.reduce((s,h)=>s+(+h.pnl||0),0);
+  const equity=START_CAP+realized;
+  const used=state.positions.reduce((s,p)=>s+(+p.margin||0),0);
+  const free=equity-used, ret=(realized/START_CAP)*100;
+  const availPct=equity>0?Math.max(0,Math.min(1,free/equity)):0;
+  const pts=equitySeries();let peak=START_CAP,mddPct=0,mddAmt=0;
+  for(const e of pts){if(e.v>peak)peak=e.v;const dd=(peak-e.v)/peak;if(dd>mddPct){mddPct=dd;mddAmt=peak-e.v;}}
+  return {realized,equity,used,free,ret,mddPct:mddPct*100,mddAmt,availPct};
+}
+
+/* ---------- 時間段篩選 ---------- */
+function rangeBounds(){
+  if(histFilter.from||histFilter.to){
+    const from=histFilter.from?new Date(histFilter.from+"T00:00:00").getTime():null;
+    const to=histFilter.to?new Date(histFilter.to+"T23:59:59").getTime():null;
+    return {from,to};
+  }
+  if(histFilter.preset&&histFilter.preset!=="all"){const to=Date.now();return {from:to-(+histFilter.preset)*86400000,to};}
+  return {from:null,to:null};
+}
+function filteredHistory(){const {from,to}=rangeBounds();return state.history.filter(h=>{const ts=+h.ts||0;if(from!=null&&ts<from)return false;if(to!=null&&ts>to)return false;return true;});}
+function scopeLabel(){if(histFilter.from||histFilter.to)return "（自訂）";if(histFilter.preset==="all")return "";return "（近"+histFilter.preset+"日）";}
+
+/* ---------- stats + ring ---------- */
+const RING_C=2*Math.PI*42;
+function renderStats(){
+  const c=computed();
+  const ev=document.getElementById("equityVal");ev.innerHTML='<span class="cur">NT$</span>'+fmt(c.equity);ev.className="equity-value "+(c.equity>=START_CAP?"up":"down");
+  const sr=document.getElementById("statReturn");sr.textContent=pct(c.ret);sr.className="v "+(c.ret>=0?"up":"down");
+  const sp=document.getElementById("statPnl");sp.textContent="NT$ "+fmtSigned(c.realized);sp.className="amt "+(c.realized>=0?"up":"down");
+  document.getElementById("statMdd").textContent="−"+c.mddPct.toFixed(2)+"%";
+  document.getElementById("statMddAmt").textContent=c.mddAmt>0?("NT$ −"+fmt(c.mddAmt)):"—";
+  const arc=document.getElementById("ringArc");arc.style.strokeDasharray=RING_C;arc.style.strokeDashoffset=RING_C*(1-c.availPct);arc.style.stroke=c.availPct<0.2?"var(--up)":"var(--gold)";
+  document.getElementById("ringPct").textContent=Math.round(c.availPct*100)+"%";
+  document.getElementById("ringFree").textContent=fmt(c.free);
+  document.getElementById("ringUsed").textContent=fmt(c.used);
+  const rr=document.getElementById("ringReal");rr.textContent=fmtSigned(c.realized);rr.className="num "+(c.realized>=0?"up":"down");
+  document.getElementById("posSlot").textContent=state.positions.length+" 檔";
+  document.getElementById("watchCountLabel").textContent=state.watchlist.length+" 檔";
+}
+
+/* ---------- positions ---------- */
+function posCard(p){
+  const miniTag=(p.spl===100)?`<span class="mini-tag">小型</span>`:"";
+  let log="";
+  p.legs.forEach(l=>{const nt=`<span class="nt">${esc(l.note||"")}</span>`;log+=`<div class="row"><span class="lbl in">進</span><span>${l.price} × ${l.lots} 口</span>${nt}<span class="t">${esc(l.t||'')}</span></div>`;});
+  p.exits.forEach(e=>{const ec=(+e.pnl>=0)?'up':'down';const nt=`<span class="nt">${esc(e.note||"")}</span>`;log+=`<div class="row"><span class="lbl out">出</span><span>${e.price} × ${e.lots} 口</span><span class="${ec}">${fmtSigned(+e.pnl)}</span>${nt}<span class="t">${esc(e.t||'')}</span></div>`;});
+  const el=document.createElement("div");el.className="pos-card";
+  el.innerHTML=`
+    <div class="pos-head">
+      <span class="pos-sym">${esc(p.sym)}</span>${miniTag}
+      <div class="pos-actions">
+        <button class="icon-btn" title="分批/全部出場" data-exit="${p.id}">⇄</button>
+        <button class="icon-btn" title="編輯" data-edit="${p.id}">✎</button>
+        <button class="icon-btn" title="刪除" data-del="${p.id}">✕</button>
+      </div>
+    </div>
+    <div class="pos-grid2">
+      <div class="cell"><span class="lab">均價</span><span class="val">${r2(avgEntry(p))}</span></div>
+      <div class="cell"><span class="lab">未平口數</span><span class="val">${openLots(p)} 口</span></div>
+      <div class="cell full"><span class="lab">使用保證金</span><span class="val">${fmt(+p.margin||0)}</span></div>
+    </div>
+    <div class="pos-log">${log}</div>`;
+  return el;
+}
+function renderPositions(){
+  const longs=state.positions.filter(p=>p.dir==="long"),shorts=state.positions.filter(p=>p.dir==="short");
+  const lb=document.getElementById("longBody"),sb=document.getElementById("shortBody");lb.innerHTML="";sb.innerHTML="";
+  const mL=longs.reduce((s,p)=>s+(+p.margin||0),0),mS=shorts.reduce((s,p)=>s+(+p.margin||0),0);
+  document.getElementById("longSub").textContent=`${longs.length} 檔 · 保證金 ${fmt(mL)}`;
+  document.getElementById("shortSub").textContent=`${shorts.length} 檔 · 保證金 ${fmt(mS)}`;
+  if(!longs.length)lb.innerHTML='<div class="empty-col">尚無多單</div>';else longs.forEach(p=>lb.appendChild(posCard(p)));
+  if(!shorts.length)sb.innerHTML='<div class="empty-col">尚無空單</div>';else shorts.forEach(p=>sb.appendChild(posCard(p)));
+  document.querySelectorAll("[data-edit]").forEach(b=>b.onclick=()=>openEdit(b.dataset.edit));
+  document.querySelectorAll("[data-exit]").forEach(b=>b.onclick=()=>openClose(b.dataset.exit));
+  document.querySelectorAll("[data-del]").forEach(b=>b.onclick=async()=>{if(await askConfirm("刪除這筆持倉（不計入歷史）？")){state.positions=state.positions.filter(x=>x.id!==b.dataset.del);persist();}});
+}
+
+/* ---------- watch / history ---------- */
+function renderWatch(){
+  const body=document.getElementById("watchBody");
+  if(!state.watchlist.length){body.innerHTML=`<tr><td colspan="4"><div class="empty">尚無觀察標的。</div></td></tr>`;return;}
+  const bt={long:"偏多",neutral:"中立",short:"偏空"};
+  body.innerHTML=state.watchlist.map(w=>`
+    <tr>
+      <td><b>${esc(w.sym)}</b></td>
+      <td><span class="dir-badge ${w.bias==='short'?'short':w.bias==='long'?'long':''}" style="${w.bias==='neutral'?'background:#242b35;color:var(--ink-dim)':''}">${bt[w.bias]||"中立"}</span></td>
+      <td style="color:var(--ink-dim)">${esc(w.reason||"")}</td>
+      <td style="text-align:right;white-space:nowrap"><button class="icon-btn" data-wedit="${w.id}">✎</button> <button class="icon-btn" data-wdel="${w.id}">✕</button></td>
+    </tr>`).join("");
+  body.querySelectorAll("[data-wedit]").forEach(b=>b.onclick=()=>openWatch(b.dataset.wedit));
+  body.querySelectorAll("[data-wdel]").forEach(b=>b.onclick=async()=>{if(await askConfirm("刪除這個觀察標的？")){state.watchlist=state.watchlist.filter(x=>x.id!==b.dataset.wdel);persist();}});
+}
+function renderHistory(){
+  const h=filteredHistory();
+  const real=h.reduce((s,x)=>s+(+x.pnl||0),0),wins=h.filter(x=>+x.pnl>0).length;
+  const winRate=h.length?wins/h.length*100:0,avg=h.length?h.reduce((s,x)=>s+(+x.ret||0),0)/h.length*100:0;
+  document.getElementById("hScope").textContent=scopeLabel();
+  document.getElementById("hCount").textContent=h.length;
+  document.getElementById("hWin").textContent=h.length?winRate.toFixed(0)+"%":"—";
+  const hr=document.getElementById("hReal");hr.textContent="NT$ "+fmtSigned(real);hr.className="v "+(real>=0?"up":"down");
+  const ha=document.getElementById("hAvg");ha.textContent=h.length?pct(avg):"—";ha.className="v "+(avg>=0?"up":"down");
+  const body=document.getElementById("histBody");
+  if(!h.length){body.innerHTML=`<tr><td colspan="10"><div class="empty">此時間段沒有成交紀錄。</div></td></tr>`;return;}
+  body.innerHTML=h.slice().reverse().map(x=>{
+    const cls=(+x.pnl>=0)?"up":"down";
+    const times=`${x.entryTime?`<div><b>進</b>${esc(x.entryTime)}</div>`:""}<div><b>出</b>${esc(x.time||"")}</div>`;
+    const rsn=(x.noteIn||x.noteOut)?`${x.noteIn?`<div><b>進</b>${esc(x.noteIn)}</div>`:""}${x.noteOut?`<div><b>出</b>${esc(x.noteOut)}</div>`:""}`:'<span style="color:var(--ink-faint)">—</span>';
+    return `<tr>
+      <td><b>${esc(x.sym)}</b></td>
+      <td><span class="dir-badge ${x.dir}">${x.dir==="long"?"多":"空"}</span></td>
+      <td><div class="times">${times}</div></td>
+      <td class="num">${x.entry}</td><td class="num">${x.exit}</td><td class="num">${x.lots}</td>
+      <td class="num ${cls}">${fmtSigned(+x.pnl)}</td><td class="num ${cls}">${pct((+x.ret||0)*100)}</td>
+      <td><div class="rsn">${rsn}</div></td>
+      <td style="text-align:right"><button class="icon-btn" data-hdel="${x.id}">✕</button></td>
+    </tr>`;}).join("");
+  body.querySelectorAll("[data-hdel]").forEach(b=>b.onclick=async()=>{if(await askConfirm("刪除這筆歷史紀錄？")){state.history=state.history.filter(x=>x.id!==b.dataset.hdel);persist();}});
+}
+
+/* ---------- filter UI ---------- */
+function syncChips(){document.querySelectorAll(".chip").forEach(c=>{const on=(!histFilter.from&&!histFilter.to&&histFilter.preset===c.dataset.preset);c.classList.toggle("on",on);});}
+document.querySelectorAll(".chip").forEach(c=>c.onclick=()=>{histFilter={preset:c.dataset.preset,from:null,to:null};document.getElementById("fFrom").value="";document.getElementById("fTo").value="";syncChips();renderHistory();});
+document.getElementById("fFrom").onchange=e=>{histFilter.from=e.target.value||null;histFilter.preset="custom";syncChips();renderHistory();};
+document.getElementById("fTo").onchange=e=>{histFilter.to=e.target.value||null;histFilter.preset="custom";syncChips();renderHistory();};
+
+/* ---------- 曲線 + 平倉成交值直方圖（成交值不顯示數字） ---------- */
+const canvas=document.getElementById("equityChart"),tip=document.getElementById("chartTip");let chartPts=[];
+function wan(n){return (n/10000).toFixed(1)+"萬";}
+function drawChart(){
+  const pts=equitySeries(),n=pts.length,dpr=window.devicePixelRatio||1,cssW=canvas.clientWidth,cssH=canvas.clientHeight;
+  canvas.width=cssW*dpr;canvas.height=cssH*dpr;const ctx=canvas.getContext("2d");ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,cssW,cssH);
+  const padL=10,padR=58,padTop=14,labelH=20,barH=70,gap=12;
+  const W=cssW-padL-padR, innerW=Math.max(10,W-14), axX=cssW-padR+6;
+  const curveTop=padTop, curveBottom=cssH-labelH-barH-gap;
+  const barTop=curveBottom+gap, barBottom=cssH-labelH;
+  const vals=pts.map(p=>p.v).concat([START_CAP]);
+  let min=Math.min(...vals),max=Math.max(...vals);const span=(max-min)||1;min-=span*0.14;max+=span*0.14;
+  const X=i=>padL+(n===1?innerW/2:(i/(n-1))*innerW), Yc=v=>curveTop+(1-(v-min)/(max-min))*(curveBottom-curveTop);
+
+  // 權益右側刻度
+  ctx.textAlign="left";ctx.font="10px monospace";
+  [min,(min+max)/2,max].forEach(v=>{const y=Yc(v);ctx.strokeStyle="rgba(154,164,178,.08)";ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(padL,y);ctx.lineTo(cssW-padR,y);ctx.stroke();ctx.fillStyle="rgba(154,164,178,.55)";ctx.fillText(wan(v),axX,y+3);});
+
+  const yB=Yc(START_CAP);ctx.setLineDash([4,4]);ctx.strokeStyle="rgba(154,164,178,.30)";ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(padL,yB);ctx.lineTo(cssW-padR,yB);ctx.stroke();ctx.setLineDash([]);
+  ctx.fillStyle="rgba(154,164,178,.55)";ctx.fillText("起始",padL+2,yB-4);
+
+  let peak=pts[0].v,peakI=0,mdd=0,pI=0,tI=0;pts.forEach((p,i)=>{if(p.v>peak){peak=p.v;peakI=i;}const dd=(peak-p.v)/peak;if(dd>mdd){mdd=dd;pI=peakI;tI=i;}});
+  if(mdd>0&&tI>pI){ctx.fillStyle="rgba(37,192,136,.08)";ctx.fillRect(X(pI),curveTop,X(tI)-X(pI),curveBottom-curveTop);}
+
+  const g=ctx.createLinearGradient(0,curveTop,0,curveBottom);g.addColorStop(0,"rgba(232,180,74,.24)");g.addColorStop(1,"rgba(232,180,74,0)");
+  ctx.beginPath();ctx.moveTo(X(0),Yc(pts[0].v));pts.forEach((p,i)=>ctx.lineTo(X(i),Yc(p.v)));ctx.lineTo(X(n-1),curveBottom);ctx.lineTo(X(0),curveBottom);ctx.closePath();ctx.fillStyle=g;ctx.fill();
+  ctx.beginPath();ctx.moveTo(X(0),Yc(pts[0].v));pts.forEach((p,i)=>ctx.lineTo(X(i),Yc(p.v)));ctx.strokeStyle="#E8B44A";ctx.lineWidth=2;ctx.lineJoin="round";ctx.stroke();
+  if(mdd>0){dotc(ctx,X(pI),Yc(pts[pI].v),"#9AA4B2");dotc(ctx,X(tI),Yc(pts[tI].v),"#25C088");}
+  dotc(ctx,X(n-1),Yc(pts[n-1].v),"#E8B44A",4);
+  const curV=pts[n-1].v;ctx.fillStyle="#E8B44A";ctx.font="10px monospace";ctx.fillText(wan(curV),axX,Yc(curV)+3);
+
+  // 直方圖：平倉成交值（不顯示任何數字）
+  const margins=pts.slice(1).map(p=>p.margin||0);
+  const maxM=Math.max(1,...margins);
+  const areaH=barBottom-barTop-14;
+  ctx.strokeStyle="rgba(154,164,178,.22)";ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(padL,barBottom);ctx.lineTo(cssW-padR,barBottom);ctx.stroke();
+  const bw=Math.min(24,Math.max(5,(innerW/Math.max(1,n-1))*0.5));
+  margins.forEach((v,k)=>{const x=X(k+1),hh=v/maxM*areaH;ctx.fillStyle="rgba(91,157,255,.85)";ctx.fillRect(x-bw/2,barBottom-hh,bw,hh);});
+  ctx.fillStyle="rgba(91,157,255,.7)";ctx.font="10px monospace";ctx.textAlign="left";ctx.fillText("成交值",axX,barTop+8);
+
+  ctx.fillStyle="rgba(154,164,178,.7)";ctx.font="10px monospace";ctx.textAlign="center";
+  const step=Math.max(1,Math.ceil(n/9));
+  pts.forEach((p,i)=>{if(i%step===0||i===n-1){ctx.fillText(p.d,X(i),cssH-6);}});
+  ctx.textAlign="left";
+
+  chartPts=pts.map((p,i)=>({x:X(i),y:Yc(p.v),d:p.d,v:p.v,pnl:p.pnl}));
+}
+function dotc(ctx,x,y,c,r=3){ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fillStyle="#161B22";ctx.fill();ctx.lineWidth=2;ctx.strokeStyle=c;ctx.stroke();}
+canvas.addEventListener("mousemove",e=>{if(!chartPts.length)return;const rect=canvas.getBoundingClientRect();const mx=e.clientX-rect.left;let nn=chartPts[0],d=1e9;chartPts.forEach(p=>{const dd=Math.abs(p.x-mx);if(dd<d){d=dd;nn=p;}});tip.style.opacity=1;tip.style.left=nn.x+"px";tip.style.top=nn.y+"px";let extra="";if(nn.pnl!=null)extra+=`<div class="v ${nn.pnl>=0?'up':'down'}" style="font-size:11px">損益 ${fmtSigned(nn.pnl)}</div>`;tip.innerHTML=`<div class="d">${esc(nn.d)}</div><div class="v">NT$ ${fmt(nn.v)}</div>`+extra;});
+canvas.addEventListener("mouseleave",()=>tip.style.opacity=0);
+
+/* ---------- 新增 / 整合持倉 ---------- */
+let curDir="long",curSpl=2000;
+function findMatch(sym,dir,spl){return state.positions.find(p=>p.sym===sym&&p.dir===dir&&(p.spl||2000)===spl);}
+function openPos(presetDir){pf_sym.value="";pf_price.value="";pf_lots.value="";pf_margin.value="";pf_note.value="";setDir(presetDir||"long");setType(2000);document.getElementById("posModalTitle").textContent="新增持倉";updateMergeHint();show("posOverlay");}
+function setDir(d){curDir=d;document.querySelectorAll("#pf_dir button").forEach(b=>b.className=b.dataset.dir===d?("on-"+d):"");updateMergeHint();}
+function setType(spl){curSpl=spl;document.querySelectorAll("#pf_type button").forEach(b=>b.className=(+b.dataset.spl===spl)?(spl===100?"on-mini":"on-normal"):"");updateMergeHint();}
+function updateMergeHint(){const sym=pf_sym.value.trim();const m=sym?findMatch(sym,curDir,curSpl):null;const box=document.getElementById("pf_merge");if(m){box.style.display="flex";document.getElementById("pf_mergeTxt").textContent=`均價 ${r2(avgEntry(m))}，${openLots(m)} 口 → 整合`;}else box.style.display="none";}
+pf_sym.addEventListener("input",updateMergeHint);
+document.querySelectorAll("#pf_dir button").forEach(b=>b.onclick=()=>setDir(b.dataset.dir));
+document.querySelectorAll("#pf_type button").forEach(b=>b.onclick=()=>setType(+b.dataset.spl));
+document.getElementById("pf_save").onclick=()=>{
+  const sym=pf_sym.value.trim();if(!sym){alert("請輸入標的名稱");return;}
+  const price=+pf_price.value||0,lots=+pf_lots.value||0,margin=+pf_margin.value||0,note=pf_note.value.trim();
+  if(!price||!lots){alert("請輸入進場價與口數");return;}if(!margin){alert("請填使用保證金");return;}
+  const m=findMatch(sym,curDir,curSpl);
+  if(m){m.legs.push({price,lots,t:stamp().md+" "+stamp().hm,note});m.margin=(+m.margin||0)+margin;toast(`已整合到「${sym}」，均價 ${r2(avgEntry(m))}`);}
+  else{state.positions.push({id:id(),sym,dir:curDir,spl:curSpl,margin,legs:[{price,lots,t:stamp().md,note}],exits:[]});}
+  hide("posOverlay");persist();
+};
+
+/* ---------- 出場 ---------- */
+let closeId=null;
+function openClose(pid){closeId=pid;const p=state.positions.find(x=>x.id===pid);document.getElementById("cf_desc").textContent=`${p.sym}（${p.dir==="long"?"多":"空"} 均價 ${r2(avgEntry(p))}，未平 ${openLots(p)} 口）`;cf_price.value=r2(avgEntry(p));cf_lots.value=openLots(p);cf_note.value="";calcClose();show("closeOverlay");}
+function calcClose(){const p=state.positions.find(x=>x.id===closeId);if(!p)return;const exit=+cf_price.value||0,ob=openLots(p),lots=Math.min(+cf_lots.value||0,ob);const d=p.dir==="long"?(exit-avgEntry(p)):(avgEntry(p)-exit);const pnl=d*(p.spl||2000)*lots;const rel=ob?(+p.margin||0)*(lots/ob):0;cf_pnl.textContent=fmtSigned(pnl);cf_pnl.className=pnl>=0?"up":"down";cf_left.textContent=(ob-lots)+" 口 / "+fmt(rel);}
+cf_price.addEventListener("input",calcClose);cf_lots.addEventListener("input",calcClose);
+document.getElementById("cf_save").onclick=()=>{const p=state.positions.find(x=>x.id===closeId);if(!p)return;const exit=+cf_price.value||0,ob=openLots(p),lots=Math.min(+cf_lots.value||0,ob);if(!exit||!lots){alert("請輸入出場價與口數");return;}const avg=avgEntry(p),d=p.dir==="long"?(exit-avg):(avg-exit),pnl=d*(p.spl||2000)*lots;const rel=ob?(+p.margin||0)*(lots/ob):0;const entT=(p.legs[0]&&p.legs[0].t)||"",note=cf_note.value.trim();p.exits.push({price:exit,lots,pnl,t:stamp().md+" "+stamp().hm,note});state.history.push({id:id(),sym:p.sym,dir:p.dir,entry:r2(avg),exit,lots,margin:rel,pnl,ret:rel?pnl/rel:0,ts:Date.now(),entryTime:entT,time:stamp().md+" "+stamp().hm,noteIn:legNotes(p),noteOut:note});p.margin=Math.max(0,(+p.margin||0)-rel);if(openLots(p)<=0)state.positions=state.positions.filter(x=>x.id!==closeId);hide("closeOverlay");persist();};
+
+/* ---------- 編輯 ---------- */
+let editId=null,editSpl=2000;
+function openEdit(pid){editId=pid;const p=state.positions.find(x=>x.id===pid);ef_sym.value=p.sym;ef_margin.value=+p.margin||0;setEditType(p.spl||2000);show("editOverlay");}
+function setEditType(spl){editSpl=spl;document.querySelectorAll("#ef_type button").forEach(b=>b.className=(+b.dataset.spl===spl)?(spl===100?"on-mini":"on-normal"):"");}
+document.querySelectorAll("#ef_type button").forEach(b=>b.onclick=()=>setEditType(+b.dataset.spl));
+document.getElementById("ef_save").onclick=()=>{const p=state.positions.find(x=>x.id===editId);if(!p)return;p.sym=ef_sym.value.trim()||p.sym;p.spl=editSpl;p.margin=+ef_margin.value||0;hide("editOverlay");persist();};
+
+/* ---------- 觀察 ---------- */
+let editWatchId=null,curBias="neutral";
+function openWatch(wid){editWatchId=wid||null;const w=wid?state.watchlist.find(x=>x.id===wid):null;document.getElementById("watchModalTitle").textContent=wid?"編輯觀察":"新增觀察";wf_sym.value=w?w.sym:"";wf_reason.value=w?(w.reason||""):"";setBias(w?w.bias:"neutral");show("watchOverlay");}
+function setBias(b){curBias=b;document.querySelectorAll("#wf_bias button").forEach(x=>{x.className=x.dataset.bias===b?("on-"+(b==="short"?"short":b==="long"?"long":"neutral")):"";});}
+document.querySelectorAll("#wf_bias button").forEach(b=>b.onclick=()=>setBias(b.dataset.bias));
+document.getElementById("wf_save").onclick=()=>{const sym=wf_sym.value.trim();if(!sym){alert("請輸入標的名稱");return;}const obj={id:editWatchId||id(),sym,bias:curBias,reason:wf_reason.value.trim()};if(editWatchId){const i=state.watchlist.findIndex(x=>x.id===editWatchId);state.watchlist[i]=obj;}else state.watchlist.push(obj);hide("watchOverlay");persist();};
+
+/* ---------- 手動歷史 ---------- */
+let histDir="long",histSpl=2000;
+document.querySelectorAll("#hf_dir button").forEach(b=>b.onclick=()=>{histDir=b.dataset.dir;document.querySelectorAll("#hf_dir button").forEach(x=>x.className=x.dataset.dir===histDir?("on-"+histDir):"");calcHist();});
+document.querySelectorAll("#hf_type button").forEach(b=>b.onclick=()=>{histSpl=+b.dataset.spl;document.querySelectorAll("#hf_type button").forEach(x=>x.className=(+x.dataset.spl===histSpl)?(histSpl===100?"on-mini":"on-normal"):"");calcHist();});
+function calcHist(){const e=+hf_entry.value||0,x=+hf_exit.value||0,l=+hf_lots.value||0,m=+hf_margin.value||0,d=histDir==="long"?(x-e):(e-x),pnl=d*histSpl*l,ret=m?pnl/m:0;hf_pnl.textContent=fmtSigned(pnl)+(m?"  ("+pct(ret*100)+")":"");hf_pnl.className=pnl>=0?"up":"down";}
+["hf_entry","hf_exit","hf_lots","hf_margin"].forEach(idn=>document.getElementById(idn).addEventListener("input",calcHist));
+document.getElementById("addHistBtn").onclick=()=>{hf_sym.value="";hf_entry.value="";hf_exit.value="";hf_lots.value="";hf_margin.value="";hf_note.value="";hf_entrytime.value="";hf_time.value=stamp().md;hf_date.value=todayISO();histDir="long";histSpl=2000;document.querySelectorAll("#hf_dir button").forEach(x=>x.className=x.dataset.dir==="long"?"on-long":"");document.querySelectorAll("#hf_type button").forEach(x=>x.className=+x.dataset.spl===2000?"on-normal":"");hf_pnl.textContent="—";show("histOverlay");};
+document.getElementById("hf_save").onclick=()=>{const sym=hf_sym.value.trim();if(!sym){alert("請輸入標的名稱");return;}const e=+hf_entry.value||0,x=+hf_exit.value||0,l=+hf_lots.value||0,m=+hf_margin.value||0;if(!e||!x||!l){alert("請輸入進場價、出場價與口數");return;}const d=histDir==="long"?(x-e):(e-x),pnl=d*histSpl*l;const ts=hf_date.value?new Date(hf_date.value+"T12:00:00").getTime():Date.now();state.history.push({id:id(),sym,dir:histDir,entry:e,exit:x,lots:l,margin:m,pnl,ret:m?pnl/m:0,ts,entryTime:hf_entrytime.value.trim(),time:hf_time.value.trim(),noteIn:hf_note.value.trim(),noteOut:""});hide("histOverlay");persist();};
+
+/* ---------- 資料同步：匯出/匯入 + GitHub Gist ---------- */
+document.getElementById("syncBtn").onclick=()=>{document.getElementById("ghToken").value=lsGet(GH_TOKEN_KEY);document.getElementById("ghGist").value=lsGet(GH_GIST_KEY);ghStatus("");show("syncOverlay");};
+function ghStatus(msg,ok){const el=document.getElementById("ghStatus");el.textContent=msg||"";el.style.color=ok===true?"var(--down)":ok===false?"var(--up)":"var(--ink-faint)";}
+document.getElementById("btnExport").onclick=()=>{try{const blob=new Blob([JSON.stringify(state,null,2)],{type:"application/json"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="股期操盤台-"+todayISO()+".json";document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),1500);toast("已匯出 JSON");}catch(e){toast("匯出失敗："+e.message);}};
+document.getElementById("btnImport").onclick=()=>document.getElementById("fileImport").click();
+document.getElementById("fileImport").onchange=async e=>{const f=e.target.files[0];if(!f)return;try{const txt=await f.text();const obj=JSON.parse(txt);if(!obj||!obj.positions){toast("檔案格式不符");e.target.value="";return;}if(await askConfirm("匯入會覆蓋目前資料，確定？")){state=normalize(obj);await persist();toast("已匯入");}}catch(err){toast("匯入失敗："+err.message);}e.target.value="";};
+async function ghApi(method,path,body){
+  const token=document.getElementById("ghToken").value.trim();
+  if(!token)throw new Error("請先填 GitHub Token");
+  const res=await fetch("https://api.github.com"+path,{method,headers:{Authorization:"token "+token,Accept:"application/vnd.github+json"},body:body?JSON.stringify(body):undefined});
+  if(!res.ok){let t="";try{t=(await res.json()).message||"";}catch(e){}throw new Error("GitHub "+res.status+(t?"："+t:""));}
+  return res.json();
+}
+document.getElementById("btnGhCreate").onclick=async()=>{try{ghStatus("建立中…");const j=await ghApi("POST","/gists",{description:"股期操盤台資料",public:false,files:{[GIST_FILE]:{content:JSON.stringify(state)}}});document.getElementById("ghGist").value=j.id;lsSet(GH_GIST_KEY,j.id);lsSet(GH_TOKEN_KEY,document.getElementById("ghToken").value.trim());ghStatus("已建立並上傳，Gist ID："+j.id,true);toast("已建立 Gist");}catch(e){ghStatus(e.message,false);}};
+document.getElementById("btnGhPush").onclick=async()=>{const gid=document.getElementById("ghGist").value.trim();if(!gid){document.getElementById("btnGhCreate").click();return;}try{ghStatus("上傳中…");await ghApi("PATCH","/gists/"+gid,{files:{[GIST_FILE]:{content:JSON.stringify(state)}}});lsSet(GH_GIST_KEY,gid);lsSet(GH_TOKEN_KEY,document.getElementById("ghToken").value.trim());ghStatus("已上傳到 GitHub（"+new Date().toLocaleTimeString()+"）",true);toast("已上傳");}catch(e){ghStatus(e.message,false);}};
+document.getElementById("btnGhPull").onclick=async()=>{const gid=document.getElementById("ghGist").value.trim();if(!gid){ghStatus("請先填 Gist ID",false);return;}try{ghStatus("下載中…");const j=await ghApi("GET","/gists/"+gid);const f=j.files&&j.files[GIST_FILE];if(!f)throw new Error("Gist 內找不到 "+GIST_FILE);const obj=JSON.parse(f.content);if(await askConfirm("從 GitHub 下載會覆蓋本機資料，確定？")){state=normalize(obj);lsSet(GH_GIST_KEY,gid);lsSet(GH_TOKEN_KEY,document.getElementById("ghToken").value.trim());await persist();ghStatus("已從 GitHub 下載並套用",true);toast("已下載");}}catch(e){ghStatus(e.message,false);}};
+
+/* ---------- tabs / overlays ---------- */
+document.querySelectorAll(".tab").forEach(t=>t.onclick=()=>{document.querySelectorAll(".tab").forEach(x=>x.classList.remove("on"));t.classList.add("on");document.querySelectorAll(".page").forEach(p=>p.classList.remove("on"));document.getElementById("page-"+t.dataset.tab).classList.add("on");if(t.dataset.tab==="deck")drawChart();});
+document.querySelectorAll("[data-add-dir]").forEach(b=>b.onclick=()=>openPos(b.dataset.addDir));
+document.getElementById("addWatchBtn").onclick=()=>openWatch();
+function show(id){document.getElementById(id).classList.add("on");}
+function hide(id){document.getElementById(id).classList.remove("on");}
+document.querySelectorAll("[data-close]").forEach(b=>b.onclick=e=>e.target.closest(".overlay").classList.remove("on"));
+document.querySelectorAll(".overlay").forEach(o=>o.onclick=e=>{if(e.target===o)o.classList.remove("on");});
+document.addEventListener("keydown",e=>{if(e.key==="Escape")document.querySelectorAll(".overlay.on").forEach(o=>o.classList.remove("on"));});
+document.getElementById("loadDemo").onclick=async()=>{if(await askConfirm("載入範例會覆蓋目前內容？")){state=demoState();persist();}};
+document.getElementById("clearAll").onclick=async()=>{if(await askConfirm("清空所有資料？")){state=emptyState();persist();}};
+
+/* ---------- main ---------- */
+function renderAll(){renderStats();renderPositions();renderWatch();renderHistory();drawChart();}
+async function persist(){await Store.save(state);renderAll();}
+let rt;window.addEventListener("resize",()=>{clearTimeout(rt);rt=setTimeout(drawChart,120);});
+(async function init(){
+  state=await Store.load();
+  if(!state)state=demoState();
+  await Store.save(state);renderAll();
+})();
+</script>
+</body>
+</html>
