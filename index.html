@@ -73,6 +73,13 @@
 
   .mini-tag{font-size:10px;font-weight:700;padding:2px 7px;border-radius:5px;background:var(--violet);color:#1a1030;letter-spacing:.03em}
 
+  .ratio-wrap{margin:0 2px 14px}
+  .rb-track{display:flex;height:12px;border-radius:7px;overflow:hidden;background:#242b35;border:1px solid var(--line)}
+  .rb-long{background:var(--up);transition:width .3s} .rb-short{background:var(--down);transition:width .3s}
+  .rb-legend{display:flex;justify-content:center;gap:24px;margin-top:7px;font-size:12px;font-family:var(--mono)}
+  .leg-row{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+  .leg-row input{flex:1;min-width:0;background:var(--bg);border:1px solid var(--line);color:var(--ink);padding:8px 10px;border-radius:8px;font-family:var(--mono);font-size:13px}
+  .leg-row span{color:var(--ink-faint);font-size:12px;flex:none}
   .book{display:grid;grid-template-columns:1fr 1fr;gap:16px}
   .col-head{display:flex;align-items:center;gap:9px;padding:10px 14px;border-radius:10px 10px 0 0;border:1px solid var(--line);border-bottom:none}
   .col.long .col-head{background:linear-gradient(180deg,rgba(245,69,92,.10),transparent)}
@@ -208,6 +215,13 @@
     </div>
 
     <div class="section-head"><h2>目前持倉</h2><span class="count" id="posSlot"></span></div>
+    <div class="ratio-wrap">
+      <div class="rb-track"><div class="rb-long" id="rbLong"></div><div class="rb-short" id="rbShort"></div></div>
+      <div class="rb-legend">
+        <span class="up" id="rbLongTxt">多單 —</span>
+        <span class="down" id="rbShortTxt">空單 —</span>
+      </div>
+    </div>
     <div class="book">
       <div class="col long">
         <div class="col-head"><span class="tag">多單</span><span class="sub" id="longSub"></span><div class="grow"></div><button class="btn sm" data-add-dir="long">＋ 新增多單</button></div>
@@ -287,10 +301,12 @@
 
 <!-- ===== 編輯持倉 Modal ===== -->
 <div class="overlay" id="editOverlay"><div class="modal">
-  <h3>編輯持倉</h3><p class="hint">改名稱、合約類型、保證金；口數與理由用出場或重新下單調整。</p>
+  <h3>編輯持倉</h3><p class="hint">可分別修正原始單與加碼單的價格、口數（打錯時用）。</p>
   <div class="field"><label>標的名稱</label><input id="ef_sym"></div>
   <div class="field"><label>合約類型</label><div class="seg" id="ef_type"><button type="button" data-spl="2000">一般（2000）</button><button type="button" data-spl="100">小型（100）</button></div></div>
   <div class="field"><label>使用保證金</label><input id="ef_margin" class="num" inputmode="numeric"></div>
+  <div class="field"><label>進場明細（價 × 口數，可分別修正或刪除）</label><div id="ef_legs"></div><button type="button" class="btn sm" id="ef_addleg" style="margin-top:8px">＋ 加一筆進場</button></div>
+  <div class="calc-preview"><span>試算</span><b id="ef_calc">—</b></div>
   <div class="modal-actions"><button class="btn ghost" data-close>取消</button><button class="btn primary" id="ef_save">儲存</button></div>
 </div></div>
 
@@ -426,6 +442,7 @@ function exited(p){return p.exits.reduce((s,e)=>s+e.lots,0);}
 function openLots(p){return entered(p)-exited(p);}
 function avgEntry(p){const tl=entered(p);return tl?p.legs.reduce((s,l)=>s+l.price*l.lots,0)/tl:0;}
 function legNotes(p){return p.legs.map(l=>l.note).filter(Boolean).join(" / ");}
+function contractVal(p){return avgEntry(p)*(p.spl||2000)*openLots(p);}
 function fmt(n){return Math.round(n).toLocaleString("en-US");}
 function fmtSigned(n){return (n>=0?"+":"−")+fmt(Math.abs(n));}
 function pct(n){return (n>=0?"+":"−")+Math.abs(n).toFixed(2)+"%";}
@@ -507,8 +524,14 @@ function renderPositions(){
   const longs=state.positions.filter(p=>p.dir==="long"),shorts=state.positions.filter(p=>p.dir==="short");
   const lb=document.getElementById("longBody"),sb=document.getElementById("shortBody");lb.innerHTML="";sb.innerHTML="";
   const mL=longs.reduce((s,p)=>s+(+p.margin||0),0),mS=shorts.reduce((s,p)=>s+(+p.margin||0),0);
-  document.getElementById("longSub").textContent=`${longs.length} 檔 · 保證金 ${fmt(mL)}`;
-  document.getElementById("shortSub").textContent=`${shorts.length} 檔 · 保證金 ${fmt(mS)}`;
+  const cvL=longs.reduce((s,p)=>s+contractVal(p),0),cvS=shorts.reduce((s,p)=>s+contractVal(p),0);
+  document.getElementById("longSub").textContent=`${longs.length} 檔 · 契約 ${fmt(cvL)} · 保證金 ${fmt(mL)}`;
+  document.getElementById("shortSub").textContent=`${shorts.length} 檔 · 契約 ${fmt(cvS)} · 保證金 ${fmt(mS)}`;
+  const cvTot=cvL+cvS, pL=cvTot?cvL/cvTot*100:0, pS=cvTot?cvS/cvTot*100:0;
+  document.getElementById("rbLong").style.width=pL+"%";
+  document.getElementById("rbShort").style.width=pS+"%";
+  document.getElementById("rbLongTxt").textContent=cvTot?`多單 契約 ${fmt(cvL)} · ${pL.toFixed(0)}%`:"多單 —";
+  document.getElementById("rbShortTxt").textContent=cvTot?`空單 契約 ${fmt(cvS)} · ${pS.toFixed(0)}%`:"空單 —";
   if(!longs.length)lb.innerHTML='<div class="empty-col">尚無多單</div>';else longs.forEach(p=>lb.appendChild(posCard(p)));
   if(!shorts.length)sb.innerHTML='<div class="empty-col">尚無空單</div>';else shorts.forEach(p=>sb.appendChild(posCard(p)));
   document.querySelectorAll("[data-edit]").forEach(b=>b.onclick=()=>openEdit(b.dataset.edit));
@@ -643,11 +666,28 @@ cf_price.addEventListener("input",calcClose);cf_lots.addEventListener("input",ca
 document.getElementById("cf_save").onclick=()=>{const p=state.positions.find(x=>x.id===closeId);if(!p)return;const exit=+cf_price.value||0,ob=openLots(p),lots=Math.min(+cf_lots.value||0,ob);if(!exit||!lots){alert("請輸入出場價與口數");return;}const avg=avgEntry(p),d=p.dir==="long"?(exit-avg):(avg-exit),pnl=d*(p.spl||2000)*lots;const rel=ob?(+p.margin||0)*(lots/ob):0;const entT=(p.legs[0]&&p.legs[0].t)||"",note=cf_note.value.trim();p.exits.push({price:exit,lots,pnl,t:stamp().md+" "+stamp().hm,note});state.history.push({id:id(),sym:p.sym,dir:p.dir,entry:r2(avg),exit,lots,margin:rel,pnl,ret:rel?pnl/rel:0,ts:Date.now(),entryTime:entT,time:stamp().md+" "+stamp().hm,noteIn:legNotes(p),noteOut:note});p.margin=Math.max(0,(+p.margin||0)-rel);if(openLots(p)<=0)state.positions=state.positions.filter(x=>x.id!==closeId);hide("closeOverlay");persist();};
 
 /* ---------- 編輯 ---------- */
-let editId=null,editSpl=2000;
-function openEdit(pid){editId=pid;const p=state.positions.find(x=>x.id===pid);ef_sym.value=p.sym;ef_margin.value=+p.margin||0;setEditType(p.spl||2000);show("editOverlay");}
+let editId=null,editSpl=2000,editLegs=[];
+function openEdit(pid){editId=pid;const p=state.positions.find(x=>x.id===pid);ef_sym.value=p.sym;ef_margin.value=+p.margin||0;setEditType(p.spl||2000);editLegs=p.legs.map(l=>({price:l.price,lots:l.lots,t:l.t||"",note:l.note||""}));renderEditLegs();show("editOverlay");}
 function setEditType(spl){editSpl=spl;document.querySelectorAll("#ef_type button").forEach(b=>b.className=(+b.dataset.spl===spl)?(spl===100?"on-mini":"on-normal"):"");}
 document.querySelectorAll("#ef_type button").forEach(b=>b.onclick=()=>setEditType(+b.dataset.spl));
-document.getElementById("ef_save").onclick=()=>{const p=state.positions.find(x=>x.id===editId);if(!p)return;p.sym=ef_sym.value.trim()||p.sym;p.spl=editSpl;p.margin=+ef_margin.value||0;hide("editOverlay");persist();};
+function renderEditLegs(){
+  const box=document.getElementById("ef_legs");
+  box.innerHTML=editLegs.length?editLegs.map((l,i)=>`<div class="leg-row"><input class="num" data-i="${i}" data-k="price" value="${l.price}" inputmode="decimal" placeholder="價"><span>×</span><input class="num" data-i="${i}" data-k="lots" value="${l.lots}" inputmode="numeric" placeholder="口"><span>口</span><button type="button" class="icon-btn" data-legdel="${i}">✕</button></div>`).join(""):'<div style="color:var(--ink-faint);font-size:12px">尚無進場，請按下方加一筆</div>';
+  box.querySelectorAll("input").forEach(inp=>inp.oninput=()=>{editLegs[+inp.dataset.i][inp.dataset.k]=inp.value;calcEdit();});
+  box.querySelectorAll("[data-legdel]").forEach(b=>b.onclick=()=>{editLegs.splice(+b.dataset.legdel,1);renderEditLegs();});
+  calcEdit();
+}
+function calcEdit(){const tl=editLegs.reduce((s,l)=>s+(+l.lots||0),0),sum=editLegs.reduce((s,l)=>s+(+l.price||0)*(+l.lots||0),0),avg=tl?sum/tl:0;const p=state.positions.find(x=>x.id===editId);const exd=p?exited(p):0;document.getElementById("ef_calc").textContent=`均價 ${r2(avg)} · 未平 ${tl-exd} 口`;}
+document.getElementById("ef_addleg").onclick=()=>{editLegs.push({price:"",lots:"",t:stamp().md,note:""});renderEditLegs();};
+document.getElementById("ef_save").onclick=()=>{
+  const p=state.positions.find(x=>x.id===editId);if(!p)return;
+  const legs=editLegs.map(l=>({price:+l.price||0,lots:+l.lots||0,t:l.t||stamp().md,note:l.note||""})).filter(l=>l.price>0&&l.lots>0);
+  if(!legs.length){alert("至少要有一筆有效的進場（價與口數）");return;}
+  const tl=legs.reduce((s,l)=>s+l.lots,0),exd=exited(p);
+  if(tl<exd){alert("進場總口數不能小於已出場的 "+exd+" 口");return;}
+  p.sym=ef_sym.value.trim()||p.sym;p.spl=editSpl;p.margin=+ef_margin.value||0;p.legs=legs;
+  hide("editOverlay");persist();
+};
 
 /* ---------- 觀察 ---------- */
 let editWatchId=null,curBias="neutral";
