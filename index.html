@@ -50,7 +50,7 @@
   .chart-cap span{display:flex;align-items:center;gap:6px}
   .chart-cap .sw{width:12px;height:3px;border-radius:2px} .chart-cap .sq{width:9px;height:9px;border-radius:2px}
   .chart-holder{position:relative;padding:2px 10px 12px}
-  #equityChart{width:100%;height:300px;display:block}
+  #equityChart{width:100%;height:240px;display:block}
   .chart-tip{position:absolute;pointer-events:none;background:#0c1017;border:1px solid var(--line);border-radius:8px;padding:7px 10px;font-size:12px;opacity:0;transition:opacity .1s;z-index:5;white-space:nowrap;transform:translate(-50%,-115%)}
   .chart-tip .d{color:var(--ink-faint);font-size:11px;margin-bottom:2px} .chart-tip .v{font-family:var(--mono);font-weight:600;font-size:13px}
 
@@ -81,7 +81,14 @@
   .leg-row input{flex:1;min-width:0;background:var(--bg);border:1px solid var(--line);color:var(--ink);padding:8px 10px;border-radius:8px;font-family:var(--mono);font-size:13px}
   .leg-row span{color:var(--ink-faint);font-size:12px;flex:none}
   .book{display:grid;grid-template-columns:1fr 1fr;gap:16px}
-  .col-head{display:flex;align-items:center;gap:9px;padding:10px 14px;border-radius:10px 10px 0 0;border:1px solid var(--line);border-bottom:none}
+  .col-head{padding:10px 14px 11px;border-radius:10px 10px 0 0;border:1px solid var(--line);border-bottom:none}
+  .col-head-top{display:flex;align-items:center;gap:9px}
+  .col-stats{display:flex;flex-wrap:wrap;gap:16px;margin-top:10px}
+  .cs{display:flex;align-items:center;gap:6px}
+  .cs-tag{font-size:11px;font-weight:700;padding:2px 8px;border-radius:5px;background:#242b35;color:var(--ink-dim)}
+  .cs-num{font-family:var(--mono);font-size:15px;font-weight:700;color:var(--ink);letter-spacing:-.01em}
+  .col.long .cs-tag{background:var(--up-soft);color:var(--up)}
+  .col.short .cs-tag{background:var(--down-soft);color:var(--down)}
   .col.long .col-head{background:linear-gradient(180deg,rgba(245,69,92,.10),transparent)}
   .col.short .col-head{background:linear-gradient(180deg,rgba(37,192,136,.10),transparent)}
   .col-head .tag{font-weight:700;font-size:14px}
@@ -159,6 +166,14 @@
     .equity-value{font-size:30px} header{flex-wrap:wrap}
   }
   @media(prefers-reduced-motion:reduce){*{transition:none!important}}
+  .ref-line{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:9px;font-size:12px;color:var(--ink-dim)}
+  .ref-line #refPnl b{font-family:var(--mono);font-size:14px;font-weight:700}
+  .ref-line .ps-note{font-size:11px;color:var(--ink-faint)}
+  .ref-line .ps{font-size:11px;color:var(--ink-faint);font-family:var(--mono)}
+  .pos-ref{margin-top:10px;padding-top:9px;border-top:1px dashed var(--line-soft);font-size:12px;color:var(--ink-dim);font-family:var(--mono)}
+  .pos-ref b{font-weight:700}
+  .leg-row input.lg-p,.leg-row input.lg-l{flex:none;width:72px}
+  .leg-row input.lg-note{flex:1;min-width:70px;font-family:var(--sans)}
 </style>
 </head>
 <body>
@@ -167,6 +182,7 @@
   <div class="brand"><b>股期模擬操盤台</b><span>Stock Futures Paper Trading</span></div>
   <div class="header-cap"><small>起始資金</small><b class="num">NT$ 1,000,000</b></div>
   <div class="header-spacer"></div>
+  <button class="btn ghost sm" id="refreshBtn">↻ 更新報價</button>
   <button class="btn ghost sm" id="syncBtn">⇅ 資料同步</button>
   <button class="btn ghost sm" id="loadDemo">載入範例</button>
   <button class="btn ghost sm" id="clearAll">清空</button>
@@ -186,10 +202,12 @@
         <div class="equity-top">
           <div class="equity-label">目前權益（起始 ＋ 已實現損益）</div>
           <div class="equity-value" id="equityVal"><span class="cur">NT$</span>—</div>
+          <div class="ref-line">
+            <span class="ps"><span id="priceStatus">—</span> · 下次 <span id="psCountdown">--:--</span></span>
+          </div>
         </div>
         <div class="chart-cap">
           <span><span class="sw" style="background:var(--gold)"></span>權益曲線</span>
-          <span><span class="sq" style="background:var(--blue)"></span>平倉成交值</span>
         </div>
         <div class="chart-holder"><canvas id="equityChart"></canvas><div class="chart-tip" id="chartTip"></div></div>
       </div>
@@ -208,6 +226,7 @@
               <div><span class="lab">剩餘資金</span><b class="num" id="ringFree">—</b></div>
               <div><span class="lab">已用保證金</span><b class="num" id="ringUsed">—</b></div>
               <div><span class="lab">已實現損益</span><b class="num" id="ringReal">—</b></div>
+              <div><span class="lab">參考損益</span><b class="num" id="ringRef">—</b></div>
             </div>
           </div>
         </div>
@@ -224,11 +243,11 @@
     </div>
     <div class="book">
       <div class="col long">
-        <div class="col-head"><span class="tag">多單</span><span class="sub" id="longSub"></span><div class="grow"></div><button class="btn sm" data-add-dir="long">＋ 新增多單</button></div>
+        <div class="col-head"><div class="col-head-top"><span class="tag">多單</span><div class="grow"></div><button class="btn sm" data-add-dir="long">＋ 新增多單</button></div><div class="col-stats" id="longStats"></div></div>
         <div class="col-body" id="longBody"></div>
       </div>
       <div class="col short">
-        <div class="col-head"><span class="tag">空單</span><span class="sub" id="shortSub"></span><div class="grow"></div><button class="btn sm" data-add-dir="short">＋ 新增空單</button></div>
+        <div class="col-head"><div class="col-head-top"><span class="tag">空單</span><div class="grow"></div><button class="btn sm" data-add-dir="short">＋ 新增空單</button></div><div class="col-stats" id="shortStats"></div></div>
         <div class="col-body" id="shortBody"></div>
       </div>
     </div>
@@ -279,7 +298,7 @@
 <div class="overlay" id="posOverlay"><div class="modal">
   <h3 id="posModalTitle">新增持倉</h3>
   <p class="hint">下同名同方向的單會自動整合、重算均價。損益＝(出場−進場) × 每口股數 × 口數，平倉才結算。</p>
-  <div class="field"><label>標的名稱</label><input id="pf_sym" placeholder="台積電期"></div>
+  <div class="field two"><div><label>標的名稱</label><input id="pf_sym" placeholder="台積電期"></div><div><label>抓價代碼（選填，對應個股）</label><input id="pf_code" class="num" placeholder="2330"></div></div>
   <div class="field"><label>方向</label><div class="seg" id="pf_dir"><button type="button" data-dir="long">做多</button><button type="button" data-dir="short">做空</button></div></div>
   <div class="field"><label>合約類型</label><div class="seg" id="pf_type"><button type="button" data-spl="2000">一般（2000 股/口）</button><button type="button" data-spl="100">小型（100 股/口）</button></div></div>
   <div class="field two"><div><label>進場價位</label><input id="pf_price" class="num" inputmode="decimal" placeholder="1085"></div><div><label>口數</label><input id="pf_lots" class="num" inputmode="numeric" placeholder="1"></div></div>
@@ -302,7 +321,7 @@
 <!-- ===== 編輯持倉 Modal ===== -->
 <div class="overlay" id="editOverlay"><div class="modal">
   <h3>編輯持倉</h3><p class="hint">可分別修正原始單與加碼單的價格、口數（打錯時用）。</p>
-  <div class="field"><label>標的名稱</label><input id="ef_sym"></div>
+  <div class="field two"><div><label>標的名稱</label><input id="ef_sym"></div><div><label>抓價代碼（選填）</label><input id="ef_code" class="num" placeholder="2330"></div></div>
   <div class="field"><label>合約類型</label><div class="seg" id="ef_type"><button type="button" data-spl="2000">一般（2000）</button><button type="button" data-spl="100">小型（100）</button></div></div>
   <div class="field"><label>每口保證金</label><input id="ef_margin" class="num" inputmode="numeric"></div>
   <div class="field"><label>進場明細（價 × 口數，可分別修正或刪除）</label><div id="ef_legs"></div><button type="button" class="btn sm" id="ef_addleg" style="margin-top:8px">＋ 加一筆進場</button></div>
@@ -402,10 +421,10 @@ function demoState(){
   const rec=(sym,dir,spl,entry,exit,lots,margin,exitAgo,entryAgo,ni,no)=>{const ex=new Date(now-exitAgo*D),en=new Date(now-entryAgo*D);const d=dir==="long"?(exit-entry):(entry-exit);const pnl=d*spl*lots;return {id:id(),sym,dir,spl,entry,exit,lots,margin,pnl,ret:margin?pnl/margin:0,ts:now-exitAgo*D,entryTime:lbl(en),time:lbl(ex),noteIn:ni,noteOut:no};};
   return {
     positions:[
-      {id:id(),sym:"聯電期",dir:"long",spl:2000,mpl:14000,legs:[{price:52.5,lots:2,t:"9/09",note:"分兩批進"},{price:53.4,lots:1,t:"9/11 10:22",note:"回測不破再進"}],exits:[]},
-      {id:id(),sym:"台積電小型期",dir:"long",spl:100,mpl:14700,legs:[{price:1085,lots:1,t:"9/12",note:"小型試單"}],exits:[]},
-      {id:id(),sym:"友達期",dir:"short",spl:2000,mpl:4500,legs:[{price:16.8,lots:5,t:"9/10",note:"跌破頸線放空"}],exits:[]},
-      {id:id(),sym:"華邦電期",dir:"short",spl:2000,mpl:7400,legs:[{price:27.3,lots:2,t:"9/11",note:"記憶體轉弱"}],exits:[]}
+      {id:id(),sym:"聯電期",code:"2303",dir:"long",spl:2000,mpl:14000,cur:54.1,legs:[{price:52.5,lots:2,t:"9/09",note:"分兩批進"},{price:53.4,lots:1,t:"9/11 10:22",note:"回測不破再進"}],exits:[]},
+      {id:id(),sym:"台積電小型期",code:"2330",dir:"long",spl:100,mpl:14700,cur:1102,legs:[{price:1085,lots:1,t:"9/12",note:"小型試單"}],exits:[]},
+      {id:id(),sym:"友達期",code:"2409",dir:"short",spl:2000,mpl:4500,cur:16.2,legs:[{price:16.8,lots:5,t:"9/10",note:"跌破頸線放空"}],exits:[]},
+      {id:id(),sym:"華邦電期",code:"2344",dir:"short",spl:2000,mpl:7400,cur:28.1,legs:[{price:27.3,lots:2,t:"9/11",note:"記憶體轉弱"}],exits:[]}
     ],
     watchlist:[
       {id:id(),sym:"鴻海期",bias:"long",reason:"站上月線＋外資連三買，等回測不破再進。"},
@@ -433,7 +452,7 @@ function normalize(o){
       const exits=(p.exits||[]).map(e=>({price:+e.price||0,lots:+e.lots||0,pnl:+e.pnl||0,t:e.t||"",note:e.note||""}));
       const ol=legs.reduce((s,l)=>s+l.lots,0)-exits.reduce((s,e)=>s+e.lots,0);
       const mpl=(p.mpl!=null)?+p.mpl:((+p.margin||0)/(ol>0?ol:1));
-      return {id:p.id||id(),sym:p.sym||"",dir:p.dir==="short"?"short":"long",spl:+p.spl||2000,mpl,legs,exits};
+      return {id:p.id||id(),sym:p.sym||"",code:p.code||"",dir:p.dir==="short"?"short":"long",spl:+p.spl||2000,mpl,cur:(p.cur!=null&&p.cur!=="")?+p.cur:null,legs,exits};
     }),
     watchlist:(o.watchlist||[]).map(w=>({id:w.id||id(),sym:w.sym||"",bias:w.bias||"neutral",reason:w.reason||""})),
     history:(o.history||[]).map(h=>({id:h.id||id(),sym:h.sym||"",dir:h.dir==="short"?"short":"long",entry:+h.entry||0,exit:+h.exit||0,lots:+h.lots||0,margin:+h.margin||0,pnl:+h.pnl||0,ret:+h.ret||0,ts:+h.ts||0,entryTime:h.entryTime||"",time:h.time||"",noteIn:h.noteIn||"",noteOut:h.noteOut||""}))
@@ -448,6 +467,8 @@ function avgEntry(p){const tl=entered(p);return tl?p.legs.reduce((s,l)=>s+l.pric
 function legNotes(p){return p.legs.map(l=>l.note).filter(Boolean).join(" / ");}
 function contractVal(p){return avgEntry(p)*(p.spl||2000)*openLots(p);}
 function marginOf(p){return (+p.mpl||0)*openLots(p);}
+function priceOf(p){return (p.cur!=null&&p.cur!=="")?+p.cur:null;}
+function refPnl(p){const c=priceOf(p);if(c==null)return null;const d=p.dir==="long"?(c-avgEntry(p)):(avgEntry(p)-c);return d*(p.spl||2000)*openLots(p);}
 function fmt(n){return Math.round(n).toLocaleString("en-US");}
 function fmtSigned(n){return (n>=0?"+":"−")+fmt(Math.abs(n));}
 function pct(n){return (n>=0?"+":"−")+Math.abs(n).toFixed(2)+"%";}
@@ -498,6 +519,10 @@ function renderStats(){
   document.getElementById("ringUsed").textContent=fmt(c.used);
   const rr=document.getElementById("ringReal");rr.textContent=fmtSigned(c.realized);rr.className="num "+(c.realized>=0?"up":"down");
   document.getElementById("posSlot").textContent=state.positions.length+" 檔";
+  let refTot=0,hasRef=false;state.positions.forEach(p=>{const r=refPnl(p);if(r!=null){refTot+=r;hasRef=true;}});
+  const rf=document.getElementById("ringRef");
+  if(hasRef){rf.textContent=fmtSigned(refTot);rf.className="num "+(refTot>=0?"up":"down");}
+  else{rf.textContent="—";rf.className="num";rf.style.color="var(--ink-faint)";}
   document.getElementById("watchCountLabel").textContent=state.watchlist.length+" 檔";
 }
 
@@ -520,8 +545,10 @@ function posCard(p){
     <div class="pos-grid2">
       <div class="cell"><span class="lab">均價</span><span class="val">${r2(avgEntry(p))}</span></div>
       <div class="cell"><span class="lab">未平口數</span><span class="val">${openLots(p)} 口</span></div>
-      <div class="cell full"><span class="lab">使用保證金（每口 ${fmt(+p.mpl||0)}）</span><span class="val">${fmt(marginOf(p))}</span></div>
+      <div class="cell"><span class="lab">每口保證金</span><span class="val">${fmt(+p.mpl||0)}</span></div>
+      <div class="cell"><span class="lab">總使用保證金</span><span class="val">${fmt(marginOf(p))}</span></div>
     </div>
+    ${p.cur!=null?`<div class="pos-ref">現價 <b>${p.cur}</b> · 參考損益 <b class="${refPnl(p)>=0?'up':'down'}">${fmtSigned(refPnl(p))}</b></div>`:""}
     <div class="pos-log">${log}</div>`;
   return el;
 }
@@ -530,8 +557,9 @@ function renderPositions(){
   const lb=document.getElementById("longBody"),sb=document.getElementById("shortBody");lb.innerHTML="";sb.innerHTML="";
   const mL=longs.reduce((s,p)=>s+marginOf(p),0),mS=shorts.reduce((s,p)=>s+marginOf(p),0);
   const cvL=longs.reduce((s,p)=>s+contractVal(p),0),cvS=shorts.reduce((s,p)=>s+contractVal(p),0);
-  document.getElementById("longSub").textContent=`${longs.length} 檔 · 契約 ${fmt(cvL)} · 保證金 ${fmt(mL)}`;
-  document.getElementById("shortSub").textContent=`${shorts.length} 檔 · 契約 ${fmt(cvS)} · 保證金 ${fmt(mS)}`;
+  const sideStats=(count,cv,mg)=>`<div class="cs"><span class="cs-tag">檔數</span><span class="cs-num">${count}</span></div><div class="cs"><span class="cs-tag">契約</span><span class="cs-num">${fmt(cv)}</span></div><div class="cs"><span class="cs-tag">保證金</span><span class="cs-num">${fmt(mg)}</span></div>`;
+  document.getElementById("longStats").innerHTML=sideStats(longs.length,cvL,mL);
+  document.getElementById("shortStats").innerHTML=sideStats(shorts.length,cvS,mS);
   const cvTot=cvL+cvS, pL=cvTot?cvL/cvTot*100:0, pS=cvTot?cvS/cvTot*100:0;
   document.getElementById("rbLong").style.width=pL+"%";
   document.getElementById("rbShort").style.width=pS+"%";
@@ -592,16 +620,15 @@ document.querySelectorAll(".chip").forEach(c=>c.onclick=()=>{histFilter={preset:
 document.getElementById("fFrom").onchange=e=>{histFilter.from=e.target.value||null;histFilter.preset="custom";syncChips();renderHistory();};
 document.getElementById("fTo").onchange=e=>{histFilter.to=e.target.value||null;histFilter.preset="custom";syncChips();renderHistory();};
 
-/* ---------- 曲線 + 平倉成交值直方圖（成交值不顯示數字） ---------- */
+/* ---------- 權益曲線 ---------- */
 const canvas=document.getElementById("equityChart"),tip=document.getElementById("chartTip");let chartPts=[];
 function wan(n){return (n/10000).toFixed(1)+"萬";}
 function drawChart(){
   const pts=equitySeries(),n=pts.length,dpr=window.devicePixelRatio||1,cssW=canvas.clientWidth,cssH=canvas.clientHeight;
   canvas.width=cssW*dpr;canvas.height=cssH*dpr;const ctx=canvas.getContext("2d");ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,cssW,cssH);
-  const padL=10,padR=58,padTop=14,labelH=20,barH=70,gap=12;
+  const padL=10,padR=58,padTop=14,labelH=20;
   const W=cssW-padL-padR, innerW=Math.max(10,W-14), axX=cssW-padR+6;
-  const curveTop=padTop, curveBottom=cssH-labelH-barH-gap;
-  const barTop=curveBottom+gap, barBottom=cssH-labelH;
+  const curveTop=padTop, curveBottom=cssH-labelH;
   const vals=pts.map(p=>p.v).concat([START_CAP]);
   let min=Math.min(...vals),max=Math.max(...vals);const span=(max-min)||1;min-=span*0.14;max+=span*0.14;
   const X=i=>padL+(n===1?innerW/2:(i/(n-1))*innerW), Yc=v=>curveTop+(1-(v-min)/(max-min))*(curveBottom-curveTop);
@@ -623,15 +650,6 @@ function drawChart(){
   dotc(ctx,X(n-1),Yc(pts[n-1].v),"#E8B44A",4);
   const curV=pts[n-1].v;ctx.fillStyle="#E8B44A";ctx.font="10px monospace";ctx.fillText(wan(curV),axX,Yc(curV)+3);
 
-  // 直方圖：平倉成交值（不顯示任何數字）
-  const margins=pts.slice(1).map(p=>p.margin||0);
-  const maxM=Math.max(1,...margins);
-  const areaH=barBottom-barTop-14;
-  ctx.strokeStyle="rgba(154,164,178,.22)";ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(padL,barBottom);ctx.lineTo(cssW-padR,barBottom);ctx.stroke();
-  const bw=Math.min(24,Math.max(5,(innerW/Math.max(1,n-1))*0.5));
-  margins.forEach((v,k)=>{const x=X(k+1),hh=v/maxM*areaH;ctx.fillStyle="rgba(91,157,255,.85)";ctx.fillRect(x-bw/2,barBottom-hh,bw,hh);});
-  ctx.fillStyle="rgba(91,157,255,.7)";ctx.font="10px monospace";ctx.textAlign="left";ctx.fillText("成交值",axX,barTop+8);
-
   ctx.fillStyle="rgba(154,164,178,.7)";ctx.font="10px monospace";ctx.textAlign="center";
   const step=Math.max(1,Math.ceil(n/9));
   pts.forEach((p,i)=>{if(i%step===0||i===n-1){ctx.fillText(p.d,X(i),cssH-6);}});
@@ -646,7 +664,7 @@ canvas.addEventListener("mouseleave",()=>tip.style.opacity=0);
 /* ---------- 新增 / 整合持倉 ---------- */
 let curDir="long",curSpl=2000;
 function findMatch(sym,dir,spl){return state.positions.find(p=>p.sym===sym&&p.dir===dir&&(p.spl||2000)===spl);}
-function openPos(presetDir){pf_sym.value="";pf_price.value="";pf_lots.value="";pf_margin.value="";pf_note.value="";setDir(presetDir||"long");setType(2000);document.getElementById("posModalTitle").textContent="新增持倉";updateMergeHint();show("posOverlay");}
+function openPos(presetDir){pf_sym.value="";pf_code.value="";pf_price.value="";pf_lots.value="";pf_margin.value="";pf_note.value="";setDir(presetDir||"long");setType(2000);document.getElementById("posModalTitle").textContent="新增持倉";updateMergeHint();show("posOverlay");}
 function setDir(d){curDir=d;document.querySelectorAll("#pf_dir button").forEach(b=>b.className=b.dataset.dir===d?("on-"+d):"");updateMergeHint();}
 function setType(spl){curSpl=spl;document.querySelectorAll("#pf_type button").forEach(b=>b.className=(+b.dataset.spl===spl)?(spl===100?"on-mini":"on-normal"):"");updateMergeHint();}
 function updateMergeHint(){const sym=pf_sym.value.trim();const m=sym?findMatch(sym,curDir,curSpl):null;const box=document.getElementById("pf_merge");if(m){box.style.display="flex";document.getElementById("pf_mergeTxt").textContent=`均價 ${r2(avgEntry(m))}，${openLots(m)} 口 → 整合`;}else box.style.display="none";}
@@ -655,11 +673,11 @@ document.querySelectorAll("#pf_dir button").forEach(b=>b.onclick=()=>setDir(b.da
 document.querySelectorAll("#pf_type button").forEach(b=>b.onclick=()=>setType(+b.dataset.spl));
 document.getElementById("pf_save").onclick=()=>{
   const sym=pf_sym.value.trim();if(!sym){alert("請輸入標的名稱");return;}
-  const price=+pf_price.value||0,lots=+pf_lots.value||0,margin=+pf_margin.value||0,note=pf_note.value.trim();
+  const price=+pf_price.value||0,lots=+pf_lots.value||0,margin=+pf_margin.value||0,note=pf_note.value.trim(),code=pf_code.value.trim();
   if(!price||!lots){alert("請輸入進場價與口數");return;}if(!margin){alert("請填每口保證金");return;}
   const m=findMatch(sym,curDir,curSpl);
-  if(m){m.legs.push({price,lots,t:stamp().md+" "+stamp().hm,note});if(margin)m.mpl=margin;toast(`已整合到「${sym}」，均價 ${r2(avgEntry(m))}`);}
-  else{state.positions.push({id:id(),sym,dir:curDir,spl:curSpl,mpl:margin,legs:[{price,lots,t:stamp().md,note}],exits:[]});}
+  if(m){m.legs.push({price,lots,t:stamp().md+" "+stamp().hm,note});if(margin)m.mpl=margin;if(code)m.code=code;toast(`已整合到「${sym}」，均價 ${r2(avgEntry(m))}`);}
+  else{state.positions.push({id:id(),sym,code,dir:curDir,spl:curSpl,mpl:margin,cur:null,legs:[{price,lots,t:stamp().md,note}],exits:[]});}
   hide("posOverlay");persist();
 };
 
@@ -672,12 +690,12 @@ document.getElementById("cf_save").onclick=()=>{const p=state.positions.find(x=>
 
 /* ---------- 編輯 ---------- */
 let editId=null,editSpl=2000,editLegs=[];
-function openEdit(pid){editId=pid;const p=state.positions.find(x=>x.id===pid);ef_sym.value=p.sym;ef_margin.value=+p.mpl||0;setEditType(p.spl||2000);editLegs=p.legs.map(l=>({price:l.price,lots:l.lots,t:l.t||"",note:l.note||""}));renderEditLegs();show("editOverlay");}
+function openEdit(pid){editId=pid;const p=state.positions.find(x=>x.id===pid);ef_sym.value=p.sym;ef_code.value=p.code||"";ef_margin.value=+p.mpl||0;setEditType(p.spl||2000);editLegs=p.legs.map(l=>({price:l.price,lots:l.lots,t:l.t||"",note:l.note||""}));renderEditLegs();show("editOverlay");}
 function setEditType(spl){editSpl=spl;document.querySelectorAll("#ef_type button").forEach(b=>b.className=(+b.dataset.spl===spl)?(spl===100?"on-mini":"on-normal"):"");}
 document.querySelectorAll("#ef_type button").forEach(b=>b.onclick=()=>setEditType(+b.dataset.spl));
 function renderEditLegs(){
   const box=document.getElementById("ef_legs");
-  box.innerHTML=editLegs.length?editLegs.map((l,i)=>`<div class="leg-row"><input class="num" data-i="${i}" data-k="price" value="${l.price}" inputmode="decimal" placeholder="價"><span>×</span><input class="num" data-i="${i}" data-k="lots" value="${l.lots}" inputmode="numeric" placeholder="口"><span>口</span><button type="button" class="icon-btn" data-legdel="${i}">✕</button></div>`).join(""):'<div style="color:var(--ink-faint);font-size:12px">尚無進場，請按下方加一筆</div>';
+  box.innerHTML=editLegs.length?editLegs.map((l,i)=>`<div class="leg-row"><input class="num lg-p" data-i="${i}" data-k="price" value="${l.price}" inputmode="decimal" placeholder="價"><span>×</span><input class="num lg-l" data-i="${i}" data-k="lots" value="${l.lots}" inputmode="numeric" placeholder="口"><span>口</span><input class="lg-note" data-i="${i}" data-k="note" value="${esc(l.note||"")}" placeholder="備註"><button type="button" class="icon-btn" data-legdel="${i}">✕</button></div>`).join(""):'<div style="color:var(--ink-faint);font-size:12px">尚無進場，請按下方加一筆</div>';
   box.querySelectorAll("input").forEach(inp=>inp.oninput=()=>{editLegs[+inp.dataset.i][inp.dataset.k]=inp.value;calcEdit();});
   box.querySelectorAll("[data-legdel]").forEach(b=>b.onclick=()=>{editLegs.splice(+b.dataset.legdel,1);renderEditLegs();});
   calcEdit();
@@ -691,7 +709,7 @@ document.getElementById("ef_save").onclick=()=>{
   if(!legs.length){alert("至少要有一筆有效的進場（價與口數）");return;}
   const tl=legs.reduce((s,l)=>s+l.lots,0),exd=exited(p);
   if(tl<exd){alert("進場總口數不能小於已出場的 "+exd+" 口");return;}
-  p.sym=ef_sym.value.trim()||p.sym;p.spl=editSpl;p.mpl=+ef_margin.value||0;p.legs=legs;
+  p.sym=ef_sym.value.trim()||p.sym;p.code=ef_code.value.trim();p.spl=editSpl;p.mpl=+ef_margin.value||0;p.legs=legs;
   hide("editOverlay");persist();
 };
 
@@ -728,6 +746,27 @@ document.getElementById("btnGhCreate").onclick=async()=>{try{ghStatus("建立中
 document.getElementById("btnGhPush").onclick=async()=>{const gid=document.getElementById("ghGist").value.trim();if(!gid){document.getElementById("btnGhCreate").click();return;}try{ghStatus("上傳中…");await ghApi("PATCH","/gists/"+gid,{files:{[GIST_FILE]:{content:JSON.stringify(state)}}});lsSet(GH_GIST_KEY,gid);lsSet(GH_TOKEN_KEY,document.getElementById("ghToken").value.trim());ghStatus("已上傳到 GitHub（"+new Date().toLocaleTimeString()+"）",true);toast("已上傳");}catch(e){ghStatus(e.message,false);}};
 document.getElementById("btnGhPull").onclick=async()=>{const gid=document.getElementById("ghGist").value.trim();if(!gid){ghStatus("請先填 Gist ID",false);return;}try{ghStatus("下載中…");const j=await ghApi("GET","/gists/"+gid);const f=j.files&&j.files[GIST_FILE];if(!f)throw new Error("Gist 內找不到 "+GIST_FILE);const obj=JSON.parse(f.content);if(await askConfirm("從 GitHub 下載會覆蓋本機資料，確定？")){state=normalize(obj);lsSet(GH_GIST_KEY,gid);lsSet(GH_TOKEN_KEY,document.getElementById("ghToken").value.trim());await persist();ghStatus("已從 GitHub 下載並套用",true);toast("已下載");}}catch(e){ghStatus(e.message,false);}};
 
+/* ---------- 現貨報價（對應個股 → 參考損益）5 分鐘自動 ---------- */
+const REFRESH_MS=5*60*1000;let nextAt=Date.now()+REFRESH_MS;
+function setPS(msg){const el=document.getElementById("priceStatus");if(el)el.textContent=msg;}
+async function yhFetch(sym){const url="https://query1.finance.yahoo.com/v8/finance/chart/"+encodeURIComponent(sym)+"?interval=1d&range=1d";const wraps=[u=>u,u=>"https://corsproxy.io/?url="+encodeURIComponent(u),u=>"https://api.allorigins.win/raw?url="+encodeURIComponent(u)];for(const w of wraps){try{const r=await fetch(w(url));if(!r.ok)continue;const j=await r.json();const p=j&&j.chart&&j.chart.result&&j.chart.result[0]&&j.chart.result[0].meta&&j.chart.result[0].meta.regularMarketPrice;if(p)return p;}catch(e){}}return null;}
+async function fetchPrice(code){if(!code)return null;const bases=code.includes(".")?[code]:[code+".TW",code+".TWO"];for(const s of bases){const p=await yhFetch(s);if(p!=null)return p;}return null;}
+let fetching=false;
+async function refreshPrices(){
+  if(fetching)return;fetching=true;
+  const coded=state.positions.filter(p=>p.code);
+  setPS("抓取中…");let ok=0,fail=0;
+  for(const p of state.positions){if(!p.code)continue;const price=await fetchPrice(p.code);if(price!=null){p.cur=Math.round(price*100)/100;ok++;}else fail++;}
+  nextAt=Date.now()+REFRESH_MS;await Store.save(state);renderAll();
+  const t=stamp();
+  if(ok>0)setPS(`現貨報價 ${t.hm}${fail?`（${fail} 檔失敗）`:""}`);
+  else if(coded.length)setPS(`抓價失敗 ${t.hm}（需本機/Pages，Yahoo 靠代理）`);
+  else setPS("尚未設定抓價代碼");
+  fetching=false;
+}
+function tickPS(){const el=document.getElementById("psCountdown");if(!el)return;const ms=Math.max(0,nextAt-Date.now()),m=Math.floor(ms/60000),s=Math.floor((ms%60000)/1000);el.textContent=String(m).padStart(2,"0")+":"+String(s).padStart(2,"0");}
+document.getElementById("refreshBtn").onclick=()=>refreshPrices();
+
 /* ---------- tabs / overlays ---------- */
 document.querySelectorAll(".tab").forEach(t=>t.onclick=()=>{document.querySelectorAll(".tab").forEach(x=>x.classList.remove("on"));t.classList.add("on");document.querySelectorAll(".page").forEach(p=>p.classList.remove("on"));document.getElementById("page-"+t.dataset.tab).classList.add("on");if(t.dataset.tab==="deck")drawChart();});
 document.querySelectorAll("[data-add-dir]").forEach(b=>b.onclick=()=>openPos(b.dataset.addDir));
@@ -756,6 +795,8 @@ let rt;window.addEventListener("resize",()=>{clearTimeout(rt);rt=setTimeout(draw
     delete p.margin;
   });
   await Store.save(state);renderAll();
+  setInterval(tickPS,1000);tickPS();
+  setInterval(refreshPrices,REFRESH_MS);refreshPrices();
 })();
 </script>
 </body>
